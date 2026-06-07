@@ -1,0 +1,21 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/outputs:/app/outputs
+    environment:
+      ERA_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://127.0.0.1:8000
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend

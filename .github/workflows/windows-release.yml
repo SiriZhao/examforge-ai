@@ -1,0 +1,109 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows EXE and Installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend static files
+        working-directory: frontend
+        run: npm run build
+
+      - name: Create backend virtual environment
+        working-directory: backend
+        run: python -m venv .venv
+
+      - name: Install backend dependencies
+        working-directory: backend
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+          .\.venv\Scripts\python.exe -m pip install pyinstaller
+
+      - name: Run backend tests
+        working-directory: backend
+        run: .\.venv\Scripts\python.exe -m pytest
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm run test -- --run
+
+      - name: Build Windows executable with PyInstaller
+        shell: pwsh
+        run: .\backend\.venv\Scripts\python.exe -m PyInstaller ExamReviewAgent.spec --noconfirm
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows installer with Inno Setup
+        shell: pwsh
+        run: |
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $iscc) {
+            throw "ISCC.exe was not found after installing Inno Setup."
+          }
+          & $iscc .\installer\exam-review-agent.iss
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExamForgeAI-exe
+          path: dist/ExamForgeAI.exe
+          if-no-files-found: error
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExamForgeAI-installer
+          path: dist/installer/ExamForgeAISetup.exe
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ExamForge AI ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/ExamForgeAI.exe
+            dist/installer/ExamForgeAISetup.exe

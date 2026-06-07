@@ -1,0 +1,11 @@
+.git
+.idea
+.vscode
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/node_modules
+**/dist
+backend/uploads/*
+backend/outputs/*
+*.log

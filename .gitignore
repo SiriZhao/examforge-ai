@@ -1,0 +1,47 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+*.tmp
+*.bak
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+backend/.venv/
+
+# Node / frontend
+node_modules/
+frontend/node_modules/
+frontend/tsconfig.tsbuildinfo
+
+# Build artifacts
+dist/
+build/
+frontend/dist/
+backend/dist/
+*.exe
+*.msi
+*.zip
+*.7z
+*.rar
+
+# Runtime data
+backend/uploads/*
+backend/outputs/*
+!backend/uploads/.gitkeep
+!backend/outputs/.gitkeep
+
+# OCR data
+backend/ocr_data/tessdata/*.traineddata
+!backend/ocr_data/tessdata/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
