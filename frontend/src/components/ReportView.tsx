@@ -144,11 +144,16 @@ function ReportSourceNotice({
   const status = result.llm_status ?? "disabled";
 
   if (status === "success" || source === "llm_enhanced") {
+    const chunked = result.llm_context_strategy === "chunked";
     return (
       <div className="success-box">
         <strong>大模型增强已完成</strong>
         <p>当前报告来源：规则模式 + 大模型增强</p>
-        <p>已使用大模型对章节总结、考点归纳、模拟题和复习计划进行增强。</p>
+        <p>
+          {chunked
+            ? "由于资料较长，系统已自动进行分块摘要和合并增强。"
+            : "已使用大模型对章节总结、考点归纳、模拟题和复习计划进行增强。"}
+        </p>
       </div>
     );
   }
@@ -157,9 +162,13 @@ function ReportSourceNotice({
     const error = result.llm_error;
     return (
       <div className="llm-fallback-box">
-        <strong>已生成规则版报告，但大模型增强未成功</strong>
+        <strong>{result.llm_error?.code === "CONTEXT_TOO_LONG" ? "资料过长，大模型增强未完成" : "已生成规则版报告，但大模型增强未成功"}</strong>
         <p>当前报告由本地规则模式生成，可用于基础复习整理。由于大模型增强未成功，章节概括、考点归纳、模拟题质量和复习计划的系统性可能有限。</p>
-        <p>建议检查大模型配置后重新生成，以获得更准确的重点提炼、更清晰的章节优先级、更完整的模拟卷和 Anki 卡片。</p>
+        <p>
+          {result.llm_error?.code === "CONTEXT_TOO_LONG"
+            ? "系统已保留规则版报告。建议减少单次上传资料，或分批上传课件、教材和往年题后分别生成。"
+            : "建议检查大模型配置后重新生成，以获得更准确的重点提炼、更清晰的章节优先级、更完整的模拟卷和 Anki 卡片。"}
+        </p>
         {error && (
           <dl className="error-detail">
             <div><dt>错误类型</dt><dd>{error.code}</dd></div>

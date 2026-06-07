@@ -85,6 +85,7 @@ LLMErrorCode = Literal[
 
 ReportSource = Literal["rule_based", "llm_enhanced", "rule_based_with_llm_failed"]
 LLMStatus = Literal["disabled", "success", "failed"]
+LLMContextStrategy = Literal["disabled", "direct", "compressed", "chunked", "failed"]
 
 
 class LLMErrorInfo(BaseModel):
@@ -222,6 +223,7 @@ class GenerateReviewResponse(BaseModel):
     llm_status: LLMStatus = "disabled"
     fallback_used: bool = False
     llm_error: LLMErrorInfo | None = None
+    llm_context_strategy: LLMContextStrategy = "disabled"
 
 
 class ChatMessage(BaseModel):

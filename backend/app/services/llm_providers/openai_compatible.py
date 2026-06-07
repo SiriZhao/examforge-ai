@@ -1,7 +1,6 @@
 import json
+import logging
 import re
-import time
-from datetime import datetime
 
 import httpx
 from pydantic import ValidationError
@@ -10,10 +9,15 @@ from app.schemas.review import LLMConfig, LLMErrorInfo, ReviewReport
 from app.services.llm_providers.base import BaseLLMProvider, LLMProviderError
 from app.services.llm_service_prompt import (
     CONTEXT_TOO_LONG_MESSAGE,
+    MAX_LLM_INPUT_CHARS,
+    build_chunk_summary_prompt,
+    build_context_from_chunk_summaries,
     build_review_prompt,
+    prepare_llm_context,
+    split_material_chunks,
 )
 
-MAX_PROMPT_CHARS = 28000
+logger = logging.getLogger(__name__)
 
 
 class OpenAICompatibleLLMProvider(BaseLLMProvider):
@@ -30,11 +34,76 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         config: LLMConfig,
     ) -> ReviewReport:
         endpoint, model = self.prepare_request(config)
-        prompt = build_review_prompt(materials_text, rule_report)
-        if len(prompt) > MAX_PROMPT_CHARS:
+        prepared = prepare_llm_context(materials_text, rule_report)
+        self.last_context_strategy = (
+            "chunked"
+            if prepared.needs_chunking
+            else "compressed"
+            if prepared.original_chars > MAX_LLM_INPUT_CHARS
+            else "direct"
+        )
+        logger.info(
+            "LLM context prepared: original_chars=%s compressed_chars=%s chunking=%s "
+            "chunk_count=%s chunk_chars=%s",
+            prepared.original_chars,
+            prepared.compressed_chars,
+            prepared.needs_chunking,
+            prepared.chunk_count,
+            prepared.chunk_chars,
+        )
+
+        context_text = prepared.text
+        if prepared.needs_chunking:
+            chunks = split_material_chunks(materials_text)
+            summaries: list[str] = []
+            for index, chunk in enumerate(chunks, start=1):
+                logger.info(
+                    "LLM chunk summary started: chunk_index=%s chunk_count=%s chunk_chars=%s",
+                    index,
+                    len(chunks),
+                    len(chunk),
+                )
+                summary_prompt = build_chunk_summary_prompt(chunk, index, len(chunks))
+                summary_payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "你是课程复习材料摘要助手。请使用简体中文，输出简洁结构化摘要。"},
+                        {"role": "user", "content": summary_prompt},
+                    ],
+                    "temperature": 0.1,
+                    "max_tokens": 900,
+                }
+                try:
+                    summaries.append(
+                        self.post_chat_completions(endpoint, config.api_key or "", summary_payload, timeout=60)
+                    )
+                    logger.info("LLM chunk summary completed: chunk_index=%s", index)
+                except LLMProviderError as exc:
+                    logger.warning(
+                        "LLM chunk summary failed: chunk_index=%s error_code=%s message=%s",
+                        index,
+                        exc.error.code,
+                        exc.error.message,
+                    )
+                    raise self.error(
+                        "CONTEXT_TOO_LONG",
+                        "资料过长，大模型增强未完成。",
+                        CONTEXT_TOO_LONG_MESSAGE,
+                        config,
+                        model=model,
+                    ) from exc
+            context_text = build_context_from_chunk_summaries(summaries, rule_report)
+            logger.info(
+                "LLM chunk summaries merged: summary_count=%s merged_chars=%s",
+                len(summaries),
+                len(context_text),
+            )
+
+        prompt = build_review_prompt(context_text, rule_report)
+        if len(prompt) > MAX_LLM_INPUT_CHARS + 8000:
             raise self.error(
                 "CONTEXT_TOO_LONG",
-                "当前资料过长，系统已生成规则版报告。",
+                "资料过长，大模型增强未完成。",
                 CONTEXT_TOO_LONG_MESSAGE,
                 config,
                 model=model,
@@ -72,9 +141,7 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         endpoint, model = self.prepare_request(config)
         payload = {
             "model": model,
-            "messages": [
-                {"role": "user", "content": "请只回复：连接成功"},
-            ],
+            "messages": [{"role": "user", "content": "请只回复：连接成功"}],
             "temperature": 0,
             "max_tokens": 20,
         }
@@ -92,30 +159,15 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         base_url = normalize_base_url(config.base_url or self.default_base_url, needs_v1=self.needs_v1_suffix)
         model = (config.model or self.default_model).strip()
         if not model:
-            raise self.error(
-                "CONFIG_MISSING",
-                "大模型配置缺少模型名称。",
-                self.model_suggestion(),
-                config,
-            )
+            raise self.error("CONFIG_MISSING", "大模型配置缺少模型名称。", self.model_suggestion(), config)
         return f"{base_url}/chat/completions", model
 
-    def post_chat_completions(
-        self,
-        endpoint: str,
-        api_key: str,
-        payload: dict,
-        *,
-        timeout: int,
-    ) -> str:
+    def post_chat_completions(self, endpoint: str, api_key: str, payload: dict, *, timeout: int) -> str:
         try:
             response = httpx.post(
                 endpoint,
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 timeout=timeout,
             )
             if response.status_code >= 400:
@@ -174,20 +226,13 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             suggestion = "请稍后重试，或检查当前服务商的额度和并发限制。"
         elif status in {400, 413} and re.search(r"context|token|length|too long", message, re.I):
             code = "CONTEXT_TOO_LONG"
-            user_message = "当前资料过长，系统已生成规则版报告。"
+            user_message = "模型服务明确返回上下文过长。"
             suggestion = CONTEXT_TOO_LONG_MESSAGE
         else:
             code = "UNKNOWN_ERROR"
             user_message = f"大模型服务返回 HTTP {status}。"
             suggestion = f"请检查服务商控制台、模型名称和 Base URL。错误摘要：{message[:160]}"
-        return self.error(
-            code,
-            user_message,
-            suggestion,
-            None,
-            model=str(model or ""),
-            http_status=status,
-        )
+        return self.error(code, user_message, suggestion, None, model=str(model or ""), http_status=status)
 
     def error(
         self,
@@ -225,12 +270,7 @@ class CustomOpenAICompatibleLLMProvider(OpenAICompatibleLLMProvider):
 
     def prepare_request(self, config: LLMConfig) -> tuple[str, str]:
         if not (config.base_url or "").strip():
-            raise self.error(
-                "CONFIG_MISSING",
-                "自定义接口缺少 Base URL。",
-                "请填写兼容 OpenAI Chat Completions 的接口地址。",
-                config,
-            )
+            raise self.error("CONFIG_MISSING", "自定义接口缺少 Base URL。", "请填写兼容 OpenAI Chat Completions 的接口地址。", config)
         return super().prepare_request(config)
 
 
@@ -320,4 +360,3 @@ def safe_provider_message(text: str) -> str:
 def mask_api_key(match: re.Match[str]) -> str:
     value = match.group(0)
     return f"{value[:3]}****{value[-4:]}" if len(value) > 8 else "***"
-

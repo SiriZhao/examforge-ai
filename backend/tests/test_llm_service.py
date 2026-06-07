@@ -4,6 +4,12 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.schemas.review import LLMConfig
 from app.services.llm_providers.openai_compatible import normalize_base_url
+from app.services.llm_service_prompt import (
+    MAX_CHUNK_CHARS,
+    MAX_LLM_INPUT_CHARS,
+    prepare_llm_context,
+    split_material_chunks,
+)
 from app.services.llm_service import generate_review_summary
 from app.services.review_planner import generate_review_report
 
@@ -185,3 +191,104 @@ def test_llm_test_endpoint_failure(monkeypatch) -> None:
     assert body["ok"] is False
     assert body["error"]["code"] == "AUTH_FAILED"
 
+
+def test_short_text_does_not_trigger_compression() -> None:
+    report = generate_review_report(MATERIALS)
+    prepared = prepare_llm_context(MATERIALS, report)
+
+    assert prepared.text == MATERIALS
+    assert prepared.needs_chunking is False
+    assert prepared.chunk_count == 0
+
+
+def test_long_text_triggers_prepare_llm_context() -> None:
+    report = generate_review_report(MATERIALS)
+    long_text = ("Chapter 1 Photosynthesis\nKey points: chloroplast, ATP.\n" * 900)
+    prepared = prepare_llm_context(long_text, report)
+
+    assert len(long_text) > MAX_LLM_INPUT_CHARS
+    assert prepared.compressed_chars <= MAX_LLM_INPUT_CHARS
+    assert "规则版章节优先级" in prepared.text
+
+
+def test_very_long_text_triggers_chunk_summarize(monkeypatch) -> None:
+    report = generate_review_report(MATERIALS)
+    very_long_text = (
+        "Chapter 1 Photosynthesis\n"
+        "1. Multiple choice: Which stage produces ATP?\n"
+        "Key points: chloroplast, light reaction, Calvin cycle.\n\n"
+        * 1200
+    )
+    calls = {"summary": 0, "final": 0}
+
+    def fake_post(url, json, headers, timeout):
+        if "max_tokens" in json:
+            calls["summary"] += 1
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": "章节：光合作用；考点：ATP；题型：选择题。"}}]},
+            )
+        calls["final"] += 1
+        return llm_response_for(report)
+
+    monkeypatch.setattr("app.services.llm_providers.openai_compatible.httpx.post", fake_post)
+    result = generate_review_summary(
+        very_long_text,
+        report,
+        LLMConfig(provider="deepseek", api_key="sk-correct", enabled=True),
+    )
+
+    assert split_material_chunks(very_long_text)
+    assert all(len(chunk) <= MAX_CHUNK_CHARS for chunk in split_material_chunks(very_long_text))
+    assert result.llm_status == "success"
+    assert result.fallback_used is False
+    assert result.llm_context_strategy == "chunked"
+    assert calls["summary"] > 0
+    assert calls["final"] == 1
+
+
+def test_chunk_summary_failure_falls_back(monkeypatch) -> None:
+    report = generate_review_report(MATERIALS)
+    very_long_text = (
+        "Chapter 1 Photosynthesis\n"
+        "1. Multiple choice: Which stage produces ATP?\n"
+        "Key points: chloroplast, light reaction, Calvin cycle.\n\n"
+        * 1200
+    )
+
+    def fake_post(url, json, headers, timeout):
+        if "max_tokens" in json:
+            raise httpx.TimeoutException("timeout")
+        return llm_response_for(report)
+
+    monkeypatch.setattr("app.services.llm_providers.openai_compatible.httpx.post", fake_post)
+    result = generate_review_summary(
+        very_long_text,
+        report,
+        LLMConfig(provider="deepseek", api_key="sk-correct", enabled=True),
+    )
+
+    assert result.llm_status == "failed"
+    assert result.fallback_used is True
+    assert result.llm_error
+    assert result.llm_error.code == "CONTEXT_TOO_LONG"
+
+
+def test_compressible_long_text_does_not_directly_trigger_context_too_long(monkeypatch) -> None:
+    report = generate_review_report(MATERIALS)
+    long_text = ("Chapter 1 Photosynthesis\nKey points: chloroplast, ATP.\n" * 900)
+
+    def fake_post(url, json, headers, timeout):
+        return llm_response_for(report)
+
+    monkeypatch.setattr("app.services.llm_providers.openai_compatible.httpx.post", fake_post)
+    result = generate_review_summary(
+        long_text,
+        report,
+        LLMConfig(provider="deepseek", api_key="sk-correct", enabled=True),
+    )
+
+    assert result.llm_status == "success"
+    assert result.fallback_used is False
+    assert result.llm_error is None
+    assert result.llm_context_strategy in {"compressed", "direct"}

@@ -143,6 +143,7 @@ export type GenerateReviewResponse = {
   llm_status?: "disabled" | "success" | "failed";
   fallback_used?: boolean;
   llm_error?: LLMErrorInfo | null;
+  llm_context_strategy?: "disabled" | "direct" | "compressed" | "chunked" | "failed";
 };
 
 export type GenerateReviewJob = {
@@ -271,4 +272,3 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
     throw error;
   }
 }
-

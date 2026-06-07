@@ -10,6 +10,7 @@ from app.services.export_service import ExportError, export_anki_csv, export_rev
 from app.services.file_parser import ParseError, parse_file
 from app.services.generator import generate_markdown_review
 from app.services.llm_service import generate_review_summary
+from app.services.llm_service_prompt import MAX_LLM_INPUT_CHARS
 from app.services.ocr_service import OCRError
 from app.services.review_planner import generate_review_report
 from app.services.upload_resolver import (
@@ -79,7 +80,13 @@ def build_generate_review_response(
 
     if progress_callback:
         if request.llm_config.enabled:
-            progress_callback(78, "正在调用大模型增强复习资料，通常需要几十秒。")
+            if len(combined_text) > MAX_LLM_INPUT_CHARS:
+                progress_callback(
+                    78,
+                    "资料较长，正在自动压缩处理。系统会提取章节结构、高频考点和代表性内容后再进行大模型增强。",
+                )
+            else:
+                progress_callback(78, "正在调用大模型增强复习资料，通常需要几十秒。")
         else:
             progress_callback(78, "正在生成规则版复习报告。")
     llm_result = generate_review_summary(combined_text, report, request.llm_config)
@@ -128,5 +135,5 @@ def build_generate_review_response(
         llm_status=llm_result.llm_status,
         fallback_used=llm_result.fallback_used,
         llm_error=llm_result.llm_error,
+        llm_context_strategy=llm_result.llm_context_strategy,
     )
-

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.schemas.review import (
+    LLMContextStrategy,
     LLMConfig,
     LLMErrorInfo,
     LLMStatus,
@@ -12,7 +13,6 @@ from app.schemas.review import (
 )
 from app.services.llm_providers import get_llm_provider
 from app.services.llm_providers.base import LLMProviderError
-from app.services.llm_service_prompt import build_review_prompt
 from app.services.review_planner import sanitize_report
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ class LLMEnhancementResult:
     llm_status: LLMStatus
     fallback_used: bool
     llm_error: LLMErrorInfo | None
+    llm_context_strategy: LLMContextStrategy
 
 
 def generate_review_summary(
@@ -53,13 +54,14 @@ def generate_review_summary(
             llm_status="disabled",
             fallback_used=False,
             llm_error=None,
+            llm_context_strategy="disabled",
         )
 
     try:
         provider = get_llm_provider(provider_name)
         model = config.model or provider.default_model
         base_url = config.base_url or provider.default_base_url
-        prompt_chars = len(build_review_prompt(parsed_materials, rule_report))
+        prompt_chars = min(len(parsed_materials), 30000)
         started = time.perf_counter()
         log_llm_event(
             provider=provider.display_name,
@@ -72,6 +74,7 @@ def generate_review_summary(
             request_started_at=datetime.now().isoformat(timespec="seconds"),
         )
         enhanced = provider.enhance_report(parsed_materials, rule_report, config)
+        context_strategy = getattr(provider, "last_context_strategy", "direct")
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         log_llm_event(
             provider=provider.display_name,
@@ -90,6 +93,7 @@ def generate_review_summary(
             llm_status="success",
             fallback_used=False,
             llm_error=None,
+            llm_context_strategy=context_strategy,
         )
     except LLMProviderError as exc:
         provider_label = exc.error.provider or provider_name
@@ -111,6 +115,7 @@ def generate_review_summary(
             llm_status="failed",
             fallback_used=True,
             llm_error=exc.error,
+            llm_context_strategy="failed",
         )
     except Exception as exc:
         provider = get_llm_provider(provider_name)
@@ -140,6 +145,7 @@ def generate_review_summary(
             llm_status="failed",
             fallback_used=True,
             llm_error=error,
+            llm_context_strategy="failed",
         )
 
 
@@ -175,4 +181,3 @@ def log_llm_event(
         error_summary,
         fallback_used,
     )
-
