@@ -1,4 +1,4 @@
-# ExamForge AI｜期末复习资料生成器
+﻿# ExamForge AI｜期末复习资料生成器
 
 把课件、教材、笔记、扫描试卷和往年题，一键整理成可直接复习的资料包。
 
@@ -22,7 +22,7 @@ GitHub：[https://github.com/SiriZhao](https://github.com/SiriZhao)
 
 ExamForge AI 是一个面向大学生期末复习场景的本地 AI 复习资料生成工具。它不是普通的文档问答机器人，而是围绕“期末前如何快速整理复习材料”这一具体场景，帮助用户从课程资料中提取重点、分析高频考点、生成模拟题和记忆卡片。
 
-它的默认规则模式无需 API Key，可以在本地完成基础复习资料生成；如果你希望获得更自然、更完整的表达，也可以选择接入大模型服务进行增强。项目支持 PPTX、PDF、DOCX、Markdown、图片和扫描版试卷，并可导出 Markdown、Word、PDF 与 Anki CSV。
+它的默认本地整理模式无需 API Key，可以在本地完成基础复习资料生成；如果你希望获得更自然、更完整的表达，也可以选择接入大模型服务进行增强。项目支持 PPTX、PDF、DOCX、Markdown、图片和扫描版试卷，并可导出 Markdown、Word、PDF 与 Anki CSV。
 
 ## English Introduction
 
@@ -38,6 +38,29 @@ ExamForge AI 的目标是把这些零散材料整理成更可执行的复习输�
 
 Most AI document tools answer questions. ExamForge AI focuses on producing structured review outputs.
 
+## v0.3.0 新能力
+
+- 复习目标选择：1 天速通、3 天冲刺、7 天系统复习、重点背诵、重点刷题、Anki 整理、往年题抓重点和平衡模式。
+- 考试类型选择：闭卷、开卷、机考、编程、实验、论文/论述、口试/展示、课程论文/报告。
+- 题型反推：结合 OCR、往年题、文件类型和题干线索，自动总结真实题型，不强制套固定题型库。
+- 生成质量评分：展示资料完整度、考点覆盖度、模拟题质量、Anki 可用性、导出就绪度和证据整合度。
+- 生成过程摘要：展示文件处理、PDF 文本层、OCR、缓存、证据块、题型线索、AI 调用和回退状态。
+- 重新优化报告：无需重新上传、OCR 或解析文件，即可按背诵、刷题、Anki、速通、精简或模拟卷训练优化当前报告。
+- 更强 Anki 卡片和模拟卷：卡片支持类型、优先级、来源提示；模拟题支持关联主题和 source hint。
+
+## ExamForge AI 与普通大模型聊天的区别
+
+| 能力 | ExamForge AI | 普通大模型聊天 |
+| --- | --- | --- |
+| OCR 清洗 | 自动处理 | 依赖用户上传质量 |
+| 多文件证据整合 | 支持 | 需要手动说明 |
+| 往年题题型反推 | 支持 | 不稳定 |
+| 复习目标定制 | 支持 | 需要反复提示 |
+| Anki CSV 导出 | 支持 | 通常需要手动整理 |
+| Word/PDF 导出 | 支持 | 需要复制排版 |
+| 质量评分 | 支持 | 无 |
+| 本地安全底稿 | 支持 | 无 |
+
 ## 核心功能 / Features
 
 | 功能 | 中文说明 | English |
@@ -50,7 +73,7 @@ Most AI document tools answer questions. ExamForge AI focuses on producing struc
 | 模拟卷生成 | 按选择题、填空题、简答题、论述题生成模拟卷，并附参考答案。 | Generate mock exams with multiple question types and reference answers. |
 | Anki 卡片导出 | 从高频考点和名词解释生成 CSV 卡片，字段为 `Front, Back, Tags`。 | Export Anki-compatible CSV flashcards from key topics and definitions. |
 | Markdown / Word / PDF 导出 | 支持将复习报告导出为 Markdown、Word 和 PDF。 | Export study packs as Markdown, Word, and PDF files. |
-| 本地运行 | 默认在本机启动前后端服务，规则模式无需 API Key。 | Run locally; rule-based mode works without an API key. |
+| 本地运行 | 默认在本机启动前后端服务，本地整理模式无需 API Key。 | Run locally; local organizing mode works without an API key. |
 | 可选大模型增强 | 可通过配置接入 OpenAI 兼容接口或自定义服务增强生成质量。 | Optionally connect LLM providers for higher-quality generation. |
 
 ## 软件截图 / Screenshots
@@ -149,7 +172,7 @@ OCR 是可选能力。没有 OCR 时，软件仍可处理文字版课程材料�
 
 ## LLM Providers
 
-规则模式无需 API Key，适合先快速生成基础复习资料。  
+本地整理模式无需 API Key，适合先快速生成本地安全底稿。  
 如果需要更自然的总结表达、更完整的题目解释，可以在高级设置中配置 OpenAI 兼容接口或自定义大模型服务。
 
 建议通过环境变量或本地配置传入密钥，不要把 API Key 提交到 GitHub。
@@ -160,7 +183,7 @@ copy .env.example .env
 
 ## 大模型增强说明 / LLM Enhancement
 
-ExamForge AI 默认支持规则模式，无需 API Key，也可以本地生成基础复习资料。  
+ExamForge AI 默认支持本地整理模式，无需 API Key，也可以本地生成基础复习资料。  
 如果你希望得到更系统、更自然、更接近人工整理的复习资料，可以开启大模型增强。
 
 大模型增强可以提升：
@@ -261,7 +284,7 @@ npm run build
 
 发布 GitHub Release 后，普通用户可以从 Release 页面下载以下文件：
 
-- `ExamForgeAISetup.exe`：推荐普通用户下载，安装后从开始菜单启动。
+- `ExamForgeAISetup-0.3.0.exe`：推荐普通用户下载，安装后从开始菜单启动。
 - `ExamForgeAI.exe`：便携版，可直接运行测试。
 
 安装后启动：
@@ -306,7 +329,7 @@ ExamForge AI 期末复习资料生成器
 
 ```text
 dist\ExamForgeAI.exe
-dist\installer\ExamForgeAISetup.exe
+dist\installer\ExamForgeAISetup-0.3.0.exe
 ```
 
 打包说明见：
@@ -317,11 +340,11 @@ docs/windows-packaging.md
 
 ## GitHub Release
 
-推送形如 `v0.1.0` 的 tag 后，GitHub Actions 会尝试在 Windows 环境中构建 exe 并创建 Release：
+推送形如 `v0.3.0` 的 tag 后，GitHub Actions 会尝试在 Windows 环境中构建 exe 并创建 Release：
 
 ```powershell
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 如果项目仓库尚未开启 Actions 或 Release 权限，请先检查 `.github/workflows/windows-release.yml` 的权限配置。
@@ -341,7 +364,7 @@ git push origin v0.1.0
 
 ### 没有 API Key 能用吗？
 
-可以。规则模式无需 API Key，可以生成基础复习资料。大模型增强是可选功能。
+可以。本地整理模式无需 API Key，可以生成基础复习资料。大模型增强是可选功能。
 
 ### 扫描试卷一定能识别吗？
 
@@ -353,7 +376,7 @@ OCR 效果取决于图片清晰度、语言数据、版面复杂度和所选 Pro
 
 ### 上传文件会传到云端吗？
 
-默认规则模式和本地解析在本机运行。如果你主动配置云 OCR 或大模型服务，相关文本或图片可能会发送给对应 Provider，请自行确认服务条款和隐私要求。
+默认本地整理模式和本地解析在本机运行。如果你主动配置云 OCR 或大模型服务，相关文本或图片可能会发送给对应 Provider，请自行确认服务条款和隐私要求。
 
 ### Windows 首次启动很慢怎么办？
 
@@ -394,3 +417,4 @@ ExamForge AI 保留英文项目名，中文名为“期末复习资料生成器�
 ## License
 
 本项目采用 MIT License，详见 [LICENSE](LICENSE)。
+

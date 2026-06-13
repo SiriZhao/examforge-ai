@@ -7,6 +7,8 @@ from app.config import settings
 from app.main import app
 from app.schemas.review import OCRConfig, ParsedFile, ParsedPage
 from app.services import file_parser
+from app.services.chapter_extractor import is_bad_unit_title
+from app.services.subprocess_utils import subprocess_no_window_kwargs
 
 
 def test_parse_endpoint_returns_unified_structure(
@@ -136,3 +138,78 @@ def test_pdf_short_text_page_uses_ocr_fallback(tmp_path: Path, monkeypatch) -> N
     assert parsed.pages[0].page_number == 1
     assert parsed.pages[0].source == "ocr_fallback"
     assert parsed.raw_text == "ocr text from scanned pdf"
+
+
+def test_windows_subprocess_kwargs_hide_console(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.subprocess_utils.sys.platform", "win32")
+
+    kwargs = subprocess_no_window_kwargs()
+
+    assert kwargs["creationflags"] != 0
+    assert kwargs["startupinfo"].dwFlags != 0
+
+
+def test_pdf_with_text_layer_skips_ocr(tmp_path: Path, monkeypatch) -> None:
+    pdf_path = tmp_path / "text-layer.pdf"
+    pdf_path.write_bytes(b"%PDF mock")
+    calls = {"ocr": 0}
+    messages: list[str] = []
+
+    class FakePdfPage:
+        def extract_text(self) -> str:
+            return "This is a text layer page with enough course material."
+
+    class FakePdfReader:
+        def __init__(self, _: str) -> None:
+            self.pages = [FakePdfPage()]
+
+    def fail_ocr(*args, **kwargs):
+        calls["ocr"] += 1
+        raise AssertionError("OCR should not run for text-layer PDFs")
+
+    monkeypatch.setattr("pypdf.PdfReader", FakePdfReader)
+    monkeypatch.setattr(file_parser, "run_ocr_on_image", fail_ocr)
+
+    parsed = file_parser.parse_file(pdf_path, OCRConfig(provider="rapidocr"), lambda message, ratio: messages.append(message))
+
+    assert parsed.pages[0].source == "text_extract"
+    assert parsed.ocr_cache_used is False
+    assert calls["ocr"] == 0
+    assert any("跳过 OCR" in message for message in messages)
+
+
+def test_scanned_pdf_uses_ocr_cache_on_second_parse(tmp_path: Path, monkeypatch) -> None:
+    settings.ocr_cache_dir = tmp_path / "cache" / "ocr"
+    pdf_path = tmp_path / "scan.pdf"
+    pdf_path.write_bytes(b"%PDF mock")
+    calls = {"ocr": 0}
+
+    class FakePdfPage:
+        def extract_text(self) -> str:
+            return ""
+
+    class FakePdfReader:
+        def __init__(self, _: str) -> None:
+            self.pages = [FakePdfPage()]
+
+    def fake_ocr(image, config):
+        calls["ocr"] += 1
+        return "cached scanned text"
+
+    monkeypatch.setattr("pypdf.PdfReader", FakePdfReader)
+    monkeypatch.setattr(file_parser, "render_pdf_page_to_image", lambda path, page_number: Image.new("RGB", (10, 10), "white"))
+    monkeypatch.setattr(file_parser, "run_ocr_on_image", fake_ocr)
+
+    first = file_parser.parse_file(pdf_path, OCRConfig(provider="rapidocr"))
+    second = file_parser.parse_file(pdf_path, OCRConfig(provider="rapidocr"))
+
+    assert first.raw_text == "cached scanned text"
+    assert second.raw_text == "cached scanned text"
+    assert second.ocr_cache_used is True
+    assert calls["ocr"] == 1
+
+
+def test_bad_unit_titles_are_filtered() -> None:
+    bad_titles = ["2 3,", "1 +1", "2 + V2", "0 =1%V9", "P(X≥k)", "未识别章节"]
+
+    assert all(is_bad_unit_title(title) for title in bad_titles)

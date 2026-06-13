@@ -1,6 +1,6 @@
-#define MyAppName "ExamForge AI"
+﻿#define MyAppName "ExamForge AI"
 #define MyShortcutName "ExamForge AI 期末复习资料生成器"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "SiriZhao"
 #define MyAppURL "https://github.com/SiriZhao"
 #define MyAppExeName "ExamForgeAI.exe"
@@ -22,7 +22,7 @@ DefaultDirName={localappdata}\Programs\ExamForge AI
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
-OutputBaseFilename=ExamForgeAISetup
+OutputBaseFilename=ExamForgeAISetup-0.3.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -46,7 +46,7 @@ ButtonWizardBrowse=浏览
 SetupAppTitle=ExamForge AI 安装程序
 SetupWindowTitle=ExamForge AI 安装程序
 WelcomeLabel1=欢迎安装 [name]
-WelcomeLabel2=安装向导将把 ExamForge AI 期末复习资料生成器安装到你的电脑。%n%n软件会在本地启动服务，上传文件、导出文件和日志会保存在用户目录中。
+WelcomeLabel2=安装向导会把 ExamForge AI 期末复习资料生成器安装到你的电脑。%n%n软件会在本地启动服务，上传文件、导出文件和日志会保存在用户目录中。
 FinishedLabel=安装完成后，你可以立即启动 ExamForge AI。
 SelectDirDesc=请选择安装目录。
 SelectDirLabel3=安装程序会把 ExamForge AI 安装到以下文件夹。

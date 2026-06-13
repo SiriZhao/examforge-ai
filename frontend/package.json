@@ -1,6 +1,6 @@
 {
-  "name": "exam-review-agent-frontend",
-  "version": "0.1.0",
+  "name": "examforge-ai",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {

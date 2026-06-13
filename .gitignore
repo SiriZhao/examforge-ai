@@ -35,8 +35,12 @@ backend/dist/
 # Runtime data
 backend/uploads/*
 backend/outputs/*
+backend/cache/*
 !backend/uploads/.gitkeep
 !backend/outputs/.gitkeep
+!backend/cache/.gitkeep
+!backend/cache/ocr/
+!backend/cache/ocr/.gitkeep
 
 # OCR data
 backend/ocr_data/tessdata/*.traineddata

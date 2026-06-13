@@ -1,5 +1,6 @@
 from contextlib import redirect_stderr, redirect_stdout
 import csv
+import re
 from html import escape
 from io import StringIO
 from pathlib import Path
@@ -51,6 +52,13 @@ def export_docx(report: ReviewReport, output_dir: Path, basename: str) -> Path:
     document = Document()
     set_document_chinese_font(document)
 
+    if report.markdown.strip():
+        add_markdown_to_docx(document, report.markdown)
+        set_document_chinese_font(document)
+        path = output_dir / f"{basename}.docx"
+        document.save(path)
+        return path
+
     document.add_heading(report.title, level=1)
     document.add_paragraph(f"生成时间：{report.generated_at}")
     document.add_heading("总览", level=2)
@@ -86,6 +94,24 @@ def export_docx(report: ReviewReport, output_dir: Path, basename: str) -> Path:
     return path
 
 
+def add_markdown_to_docx(document: Document, markdown: str) -> None:
+    for raw_line in markdown.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("#"):
+            level = min(len(line) - len(line.lstrip("#")), 3)
+            document.add_heading(line.lstrip("#").strip(), level=level)
+        elif line.startswith(("- ", "* ")):
+            document.add_paragraph(line[2:].strip(), style="List Bullet")
+        elif re.match(r"^\d+[\.\、]\s+", line):
+            document.add_paragraph(re.sub(r"^\d+[\.\、]\s+", "", line), style="List Number")
+        elif line.startswith("|"):
+            document.add_paragraph(line)
+        else:
+            document.add_paragraph(line)
+
+
 def export_pdf(markdown: str, output_dir: Path, basename: str) -> Path:
     html = markdown_to_html(markdown)
     path = output_dir / f"{basename}.pdf"
@@ -107,9 +133,9 @@ def export_anki_csv(report: ReviewReport, output_dir: Path, basename: str) -> Pa
     path = output_dir / f"{basename}-anki.csv"
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["Front", "Back", "Tags"])
+        writer.writerow(["Front", "Back", "Tags", "CardType", "Priority", "SourceHint"])
         for card in report.anki_cards:
-            writer.writerow([card.front, card.back, card.tags])
+            writer.writerow([card.front, card.back, card.tags, card.card_type, card.priority, card.source_hint])
     return path
 
 

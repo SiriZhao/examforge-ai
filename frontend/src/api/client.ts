@@ -20,9 +20,30 @@ export type UploadResponse = {
 };
 
 export type ExportFormat = "md" | "docx" | "pdf";
+export type StudyGoal =
+  | "one_day_sprint"
+  | "three_day_sprint"
+  | "seven_day_plan"
+  | "memorization"
+  | "practice_heavy"
+  | "anki_focused"
+  | "past_exam_focused"
+  | "balanced";
+export type ExamType =
+  | "unknown"
+  | "closed_book"
+  | "open_book"
+  | "computer_based"
+  | "programming"
+  | "lab_exam"
+  | "essay_based"
+  | "oral_presentation"
+  | "coursework_report";
+export type OptimizationGoal = "memorization" | "practice" | "anki" | "concise" | "detailed" | "sprint" | "exam_like" | "fix_quality";
 
 export type OCRConfig = {
   provider: "rapidocr" | "local_tesseract" | "custom_api" | "openai_vision" | "baidu_ocr";
+  mode?: "fast" | "full";
   api_url?: string | null;
   api_key?: string | null;
   secret_key?: string | null;
@@ -93,22 +114,91 @@ export type SprintPlan = {
 
 export type GeneratedExamQuestion = {
   question_type: string;
+  type?: string;
   question: string;
   answer: string;
   chapter: string;
   concept: string;
+  explanation?: string;
+  difficulty?: string;
+  related_topic?: string;
+  source_hint?: string;
 };
 
 export type AnkiCard = {
   front: string;
   back: string;
   tags: string;
+  card_type?: string;
+  priority?: number;
+  source_hint?: string;
+};
+
+export type StudyUnit = {
+  name: string;
+  reason: string;
+  priority: number;
+  must_know: string[];
+  key_points: string[];
+  formulas_or_methods: string[];
+  common_exam_angles: string[];
+  pitfalls: string[];
+  how_to_review: string;
+};
+
+export type QuestionTypeInsight = {
+  name: string;
+  confidence?: number;
+  evidence: string;
+  evidence_sources?: string[];
+  features: string[];
+  related_topics: string[];
+  answer_strategy: string;
+  sample_questions: string[];
+  practice_suggestions?: string;
+  is_from_past_exam?: boolean;
+};
+
+export type ReportQuality = {
+  quality_score: number;
+  material_completeness_score: number;
+  topic_coverage_score: number;
+  mock_exam_quality_score: number;
+  anki_quality_score: number;
+  export_readiness_score: number;
+  evidence_integration_score: number;
+  quality_warnings: string[];
+  quality_failures: string[];
+  repairable: boolean;
+};
+
+export type GenerationSummary = {
+  files_processed: number;
+  pages_total: number;
+  pages_text_extracted: number;
+  pages_ocr_processed: number;
+  pages_ocr_skipped: number;
+  ocr_cache_hits: number;
+  evidence_chunks: number;
+  detected_study_units: number;
+  detected_question_types: number;
+  mock_questions_count: number;
+  anki_cards_count: number;
+  llm_calls: number;
+  fallback_used: boolean;
+  final_report_source: string;
+  notes: string[];
 };
 
 export type ReviewReport = {
   title: string;
   summary: string;
+  study_goal?: StudyGoal;
+  exam_type?: ExamType;
+  overview?: Record<string, unknown>;
   chapters: ChapterReview[];
+  study_units?: StudyUnit[];
+  question_types?: QuestionTypeInsight[];
   past_exam_analysis: {
     detected_files: PastExamFileAnalysis[];
     high_frequency_topics: PastExamTopic[];
@@ -129,6 +219,8 @@ export type ReviewReport = {
   sprint_checklist: string[];
   low_priority: string[];
   insufficient_materials: string[];
+  quality?: ReportQuality | null;
+  markdown?: string;
   generated_at: string;
 };
 
@@ -139,11 +231,17 @@ export type GenerateReviewResponse = {
   download_links: Partial<Record<ExportFormat, string>>;
   anki_csv_download_path?: string | null;
   export_format: ExportFormat;
-  report_source?: "rule_based" | "llm_enhanced" | "rule_based_with_llm_failed";
+  report_source?:
+    | "rule_based"
+    | "local_safe_draft_with_ai_outline"
+    | "llm_enhanced"
+    | "llm_markdown_fallback"
+    | "rule_based_with_llm_failed";
   llm_status?: "disabled" | "success" | "failed";
   fallback_used?: boolean;
   llm_error?: LLMErrorInfo | null;
   llm_context_strategy?: "disabled" | "direct" | "compressed" | "chunked" | "failed";
+  generation_summary?: GenerationSummary;
 };
 
 export type GenerateReviewJob = {
@@ -181,6 +279,8 @@ export type GenerateReviewParams = {
   export_formats?: ExportFormat[];
   title: string;
   course_name?: string;
+  study_goal?: StudyGoal;
+  exam_type?: ExamType;
   ocr_config: OCRConfig;
   llm_config: LLMConfig;
 };
@@ -193,6 +293,21 @@ export async function uploadFiles(files: File[]): Promise<UploadResponse> {
 
 export async function generateReview(params: GenerateReviewParams): Promise<GenerateReviewResponse> {
   return request<GenerateReviewResponse>("/generate-review", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
+export async function reoptimizeReview(params: {
+  current_report: ReviewReport;
+  evidence_text?: string;
+  optimization_goal: OptimizationGoal;
+  original_study_goal: StudyGoal;
+  original_exam_type: ExamType;
+  llm_config: LLMConfig;
+}): Promise<{ review_report: ReviewReport; markdown: string; optimized: boolean; message: string; quality: ReportQuality }> {
+  return request("/api/review/reoptimize", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -262,9 +377,7 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
   } catch (error) {
     if (axios.isAxiosError(error)) {
       if (!error.response) {
-        throw new Error(
-          "无法连接后端服务。请重新双击 start.bat；如果仍然失败，请运行 scripts\\stop-app.ps1 后再启动。",
-        );
+        throw new Error("无法连接后端服务。请重新双击 start.bat；如果仍然失败，请运行 scripts\\stop-app.ps1 后再启动。");
       }
       const data = error.response?.data as { message?: string; detail?: string } | undefined;
       throw new Error(data?.message ?? data?.detail ?? error.message);

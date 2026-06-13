@@ -74,9 +74,40 @@ def test_generate_review_exports_markdown_and_anki(
     assert body["review_report"]["past_exam_analysis"]["detected_files"]
     assert body["review_report"]["mock_exam"]["questions"]
     assert body["review_report"]["anki_cards"]
+    assert body["review_report"]["quality"]["quality_score"] >= 0
+    assert body["generation_summary"]["files_processed"] == 1
+    assert body["generation_summary"]["pages_text_extracted"] == 1
     assert any(settings.output_dir.glob("*.md"))
     assert any(settings.output_dir.glob("*-anki.csv"))
     assert "secret-key-should-not-leak" not in response.text
+
+
+def test_reoptimize_keeps_existing_report_without_ocr(tmp_path: Path, monkeypatch) -> None:
+    settings.output_dir = tmp_path / "outputs"
+    settings.output_dir.mkdir()
+    from app.services.review_planner import generate_review_report
+
+    review_report = generate_review_report(PARSED_TEXT, study_goal="balanced", exam_type="closed_book")
+
+    def fail_parse(*args, **kwargs):
+        raise AssertionError("reoptimize must not parse files or OCR")
+
+    monkeypatch.setattr("app.routers.generate_review.parse_file", fail_parse)
+    client = TestClient(app)
+    response = client.post(
+        "/api/review/reoptimize",
+        json={
+            "current_report": review_report.model_dump(mode="json"),
+            "evidence_text": PARSED_TEXT,
+            "optimization_goal": "memorization",
+            "original_study_goal": "memorization",
+            "original_exam_type": "closed_book",
+            "llm_config": {"enabled": False},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["optimized"] is True
 
 
 def test_generate_review_exports_docx(

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Exam Review Agent.
+Thanks for helping improve ExamForge AI.
 
 ## Development
 

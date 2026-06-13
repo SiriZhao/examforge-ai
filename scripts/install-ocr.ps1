@@ -47,7 +47,7 @@ function Install-WithWinget($id) {
     winget install --id $id --source winget --accept-package-agreements --accept-source-agreements
 }
 
-Write-Host "Exam Review Agent OCR installer" -ForegroundColor Green
+Write-Host "ExamForge AI OCR installer" -ForegroundColor Green
 
 if (-not (Find-Tesseract)) {
     Write-Step "Installing Tesseract OCR"

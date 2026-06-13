@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from app.schemas.review import LLMConfig, LLMErrorInfo, ReviewReport
+from app.schemas.review import ExamType, LLMConfig, LLMErrorInfo, ReviewReport, StudyGoal
 
 
 @dataclass
@@ -37,12 +37,16 @@ class BaseLLMProvider(ABC):
     def enhance_report(
         self,
         materials_text: str,
-        rule_report: ReviewReport,
+        safe_draft: ReviewReport,
         config: LLMConfig,
+        *,
+        course_name: str | None = None,
+        file_texts: list[tuple[str, str]] | None = None,
+        study_goal: StudyGoal = "balanced",
+        exam_type: ExamType = "unknown",
     ) -> ReviewReport:
         raise NotImplementedError
 
     @abstractmethod
     def test_connection(self, config: LLMConfig) -> str:
         raise NotImplementedError
-

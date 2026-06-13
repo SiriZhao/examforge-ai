@@ -13,6 +13,7 @@ from app.utils.logging_config import configure_logging
 def ensure_runtime_directories() -> None:
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.output_dir.mkdir(parents=True, exist_ok=True)
+    settings.ocr_cache_dir.mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
@@ -22,7 +23,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 configure_logging()
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 register_error_handlers(app)
 
 app.add_middleware(
@@ -47,4 +48,4 @@ app.include_router(export.router, prefix="/api/export", tags=["export"])
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "version": settings.app_version}

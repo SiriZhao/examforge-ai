@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipTests,
     [switch]$SkipInstaller
 )
@@ -14,6 +14,7 @@ $pythonExe = Join-Path $backendVenv "Scripts\python.exe"
 $distDir = Join-Path $root "dist"
 $buildDir = Join-Path $root "build"
 $installerOut = Join-Path $distDir "installer"
+$appVersion = "0.3.0"
 
 function Step {
     param([string]$Message)
@@ -43,9 +44,25 @@ function Find-InnoCompiler {
     return $null
 }
 
+function Stop-RunningExamForge {
+    $running = Get-Process -Name "ExamForgeAI" -ErrorAction SilentlyContinue
+    if (-not $running) { return }
+
+    Write-Host "ExamForgeAI.exe is running. Attempting to stop it before rebuilding..." -ForegroundColor Yellow
+    foreach ($process in $running) {
+        try {
+            Stop-Process -Id $process.Id -Force -ErrorAction Stop
+        } catch {
+            throw "ExamForgeAI.exe is currently running and could not be stopped. Please close ExamForge AI and rerun scripts\build-windows.ps1."
+        }
+    }
+    Start-Sleep -Seconds 1
+}
+
 Push-Location $root
 try {
     Step "Clean old build artifacts"
+    Stop-RunningExamForge
     if (Test-Path $distDir) { Remove-Item -LiteralPath $distDir -Recurse -Force }
     if (Test-Path $buildDir) { Remove-Item -LiteralPath $buildDir -Recurse -Force }
     New-Item -ItemType Directory -Path $installerOut -Force | Out-Null
@@ -106,7 +123,7 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 throw "Inno Setup failed with exit code $LASTEXITCODE."
             }
-            $setupPath = Join-Path $installerOut "ExamForgeAISetup.exe"
+            $setupPath = Join-Path $installerOut "ExamForgeAISetup-$appVersion.exe"
             if (Test-Path $setupPath) {
                 Write-Host "Installer: $setupPath" -ForegroundColor Green
             } else {
@@ -114,14 +131,14 @@ try {
             }
         } else {
             Write-Host "Inno Setup compiler was not found. Skipping installer build." -ForegroundColor Yellow
-            Write-Host "Install Inno Setup 6 and rerun this script to create dist\installer\ExamForgeAISetup.exe."
+            Write-Host "Install Inno Setup 6 and rerun this script to create dist\installer\ExamForgeAISetup-$appVersion.exe."
         }
     }
 
     Write-Host ""
     Write-Host "Windows packaging completed." -ForegroundColor Green
     Write-Host "EXE: dist\ExamForgeAI.exe"
-    Write-Host "Installer: dist\installer\ExamForgeAISetup.exe"
+    Write-Host "Installer: dist\installer\ExamForgeAISetup-$appVersion.exe"
 } finally {
     Pop-Location
 }

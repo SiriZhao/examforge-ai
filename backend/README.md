@@ -57,4 +57,4 @@ uvicorn app.main:app --reload
 - `docx`
 - `pdf`
 
-未提供大模型 API Key 时，后端会生成规则版复习报告。
+未提供大模型 API Key 时，后端会生成本地安全底稿。

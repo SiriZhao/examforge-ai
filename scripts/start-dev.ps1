@@ -22,7 +22,7 @@ function Wait-ForUrl {
 }
 
 try {
-    Write-Host "ExamForge AI / Exam Review Agent 本地启动器" -ForegroundColor Green
+    Write-Host "ExamForge AI 本地启动器" -ForegroundColor Green
     Write-Host "项目目录：$ProjectRoot"
 
     Write-Title "检查运行环境"

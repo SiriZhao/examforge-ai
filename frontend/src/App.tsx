@@ -3,13 +3,17 @@ import { useMemo, useRef, useState, type RefObject } from "react";
 import {
   createGenerateReviewJob,
   getGenerateReviewJob,
+  reoptimizeReview,
   testLLMConnection,
   uploadFiles,
+  type ExamType,
   type ExportFormat,
   type GenerateReviewResponse,
   type LLMConfig,
   type LLMTestResponse,
   type OCRConfig,
+  type OptimizationGoal,
+  type StudyGoal,
 } from "./api/client";
 import { ChatPanel } from "./components/ChatPanel";
 import { ReportView } from "./components/ReportView";
@@ -49,13 +53,51 @@ const PROGRESS_STEPS = ["正在上传", "正在提取文本", "正在识别扫�
 
 type MaterialCategory = "slides" | "exam" | "document" | "image";
 
+const STUDY_GOALS: Array<{ value: StudyGoal; label: string; hint: string }> = [
+  { value: "one_day_sprint", label: "1 天速通", hint: "适合临考前快速抓重点。" },
+  { value: "three_day_sprint", label: "3 天冲刺", hint: "适合短期补基础、刷题和模拟。" },
+  { value: "seven_day_plan", label: "7 天系统复习", hint: "适合完整梳理知识结构。" },
+  { value: "memorization", label: "重点背诵", hint: "适合定义、公式和易混点记忆。" },
+  { value: "practice_heavy", label: "重点刷题", hint: "适合通过题目掌握考点。" },
+  { value: "anki_focused", label: "整理 Anki", hint: "适合长期记忆和反复复习。" },
+  { value: "past_exam_focused", label: "根据往年题抓重点", hint: "适合已上传往年题材料。" },
+  { value: "balanced", label: "平衡模式", hint: "兼顾结构、题型、模拟卷和 Anki。" },
+];
+
+const EXAM_TYPES: Array<{ value: ExamType; label: string; hint: string }> = [
+  { value: "unknown", label: "不确定", hint: "系统自动判断。" },
+  { value: "closed_book", label: "闭卷考试", hint: "偏记忆、定义、公式和快速答题。" },
+  { value: "open_book", label: "开卷考试", hint: "偏材料定位、综合分析和答题框架。" },
+  { value: "computer_based", label: "机考", hint: "偏题型速度和步骤稳定性。" },
+  { value: "programming", label: "编程考试", hint: "偏代码阅读、调试、实现和边界条件。" },
+  { value: "lab_exam", label: "实验考试", hint: "偏步骤、现象、数据和误差分析。" },
+  { value: "essay_based", label: "论文/论述型考试", hint: "偏概念框架、论述提纲和论据组织。" },
+  { value: "oral_presentation", label: "口试/展示", hint: "偏表达结构和追问准备。" },
+  { value: "coursework_report", label: "课程论文/报告", hint: "偏结构、证据和论证。" },
+];
+
+const OPTIMIZATION_GOALS: Array<{ value: OptimizationGoal; label: string }> = [
+  { value: "memorization", label: "更适合背诵" },
+  { value: "practice", label: "更适合刷题" },
+  { value: "anki", label: "更适合 Anki" },
+  { value: "sprint", label: "更适合 1 天速通" },
+  { value: "detailed", label: "更详细" },
+  { value: "concise", label: "更简洁" },
+  { value: "exam_like", label: "更像期末模拟卷" },
+];
+
 export default function App() {
   const settingsRef = useRef<HTMLDetailsElement>(null);
   const llmRef = useRef<HTMLFieldSetElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [courseName, setCourseName] = useState("期末复习资料包");
+  const [studyGoal, setStudyGoal] = useState<StudyGoal>("balanced");
+  const [examType, setExamType] = useState<ExamType>("unknown");
+  const [optimizationGoal, setOptimizationGoal] = useState<OptimizationGoal>("memorization");
+  const [optimizing, setOptimizing] = useState(false);
   const [ocrConfig, setOcrConfig] = useState<OCRConfig>({
     provider: "rapidocr",
+    mode: "fast",
     api_url: "",
     api_key: "",
     secret_key: "",
@@ -165,6 +207,8 @@ export default function App() {
         export_formats: ["md", "docx", "pdf"],
         title: courseName || "期末复习资料包",
         course_name: courseName || "期末复习资料包",
+        study_goal: studyGoal,
+        exam_type: examType,
         ocr_config: normalizeOcrConfig(ocrConfig),
         llm_config: normalizeLlmConfig(llmConfig),
       });
@@ -202,6 +246,34 @@ export default function App() {
     }
   }
 
+  async function handleReoptimize() {
+    if (!result) return;
+    setOptimizing(true);
+    setError("");
+    setStatus("正在基于当前报告重新优化，不会重新 OCR。");
+    try {
+      const response = await reoptimizeReview({
+        current_report: result.review_report,
+        evidence_text: result.markdown,
+        optimization_goal: optimizationGoal,
+        original_study_goal: studyGoal,
+        original_exam_type: examType,
+        llm_config: normalizeLlmConfig(llmConfig),
+      });
+      setResult({
+        ...result,
+        review_report: response.review_report,
+        markdown: response.markdown,
+      });
+      setStatus(response.message);
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "重新优化失败。";
+      setError(`${message} 已保留当前报告。`);
+    } finally {
+      setOptimizing(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="hero">
@@ -231,7 +303,7 @@ export default function App() {
           <div className="section-title">
             <p className="eyebrow">创建复习资料包</p>
             <h2>学习材料</h2>
-            <p>新用户可以直接使用默认的规则模式生成资料。OCR 和大模型设置均为可选高级功能。</p>
+            <p>新用户可以直接使用默认的本地整理模式生成资料。OCR 和大模型设置均为可选高级功能。</p>
           </div>
 
           <label className="field">
@@ -242,6 +314,30 @@ export default function App() {
               placeholder="例如：植物生物学导论"
             />
           </label>
+
+          <section className="settings-card">
+            <h3>生成设置</h3>
+            <div className="settings-grid">
+              <label className="field">
+                <span>复习目标</span>
+                <select value={studyGoal} onChange={(event) => setStudyGoal(event.target.value as StudyGoal)}>
+                  {STUDY_GOALS.map((goal) => (
+                    <option key={goal.value} value={goal.value}>{goal.label}</option>
+                  ))}
+                </select>
+                <small>{STUDY_GOALS.find((goal) => goal.value === studyGoal)?.hint}</small>
+              </label>
+              <label className="field">
+                <span>考试类型</span>
+                <select value={examType} onChange={(event) => setExamType(event.target.value as ExamType)}>
+                  {EXAM_TYPES.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+                <small>{EXAM_TYPES.find((item) => item.value === examType)?.hint}</small>
+              </label>
+            </div>
+          </section>
 
           <FileDropzone files={files} addFiles={addFiles} removeFile={removeFile} counts={categoryCounts} />
 
@@ -267,7 +363,7 @@ export default function App() {
           <div className="quality-guide info-box">
             <strong>想要更准确的复习资料？</strong>
             <p>
-              规则模式无需 API Key，适合快速生成基础报告；如果你希望得到更系统的章节总结、更准确的高频考点、更完整的模拟卷和 Anki 卡片，建议开启大模型增强。
+              本地整理模式无需 API Key，适合快速生成本地安全底稿；如果你希望得到更自然的章节重组、更贴近考试的题型归纳和更完整的模拟卷、Anki 卡片，建议开启大模型增强。
             </p>
             <button type="button" className="secondary accent" onClick={openLLMSettings}>
               配置大模型
@@ -294,6 +390,11 @@ export default function App() {
           exporting={exporting}
           onOpenLLMSettings={openLLMSettings}
           onTestLLM={runLLMTest}
+          optimizationGoal={optimizationGoal}
+          optimizationOptions={OPTIMIZATION_GOALS}
+          optimizing={optimizing}
+          onOptimizationGoalChange={setOptimizationGoal}
+          onReoptimize={handleReoptimize}
         />
       </section>
 
@@ -413,6 +514,13 @@ function ConfigGrid({
         <legend>OCR 设置</legend>
         <p className="helper-text">用于图片和扫描版 PDF。文字版 PDF、PPTX 和 DOCX 通常不需要 OCR。</p>
         <label className="field">
+          <span>OCR 模式</span>
+          <select value={ocrConfig.mode ?? "fast"} onChange={(event) => setOcrConfig({ ...ocrConfig, mode: event.target.value as OCRConfig["mode"] })}>
+            <option value="fast">快速模式，优先识别关键扫描页</option>
+            <option value="full">完整模式，全量 OCR 扫描页</option>
+          </select>
+        </label>
+        <label className="field">
           <span>OCR 服务</span>
           <select value={ocrConfig.provider} onChange={(event) => setOcrConfig({ ...ocrConfig, provider: event.target.value as OCRConfig["provider"] })}>
             <option value="rapidocr">RapidOCR，本地识别，无需密钥</option>
@@ -426,7 +534,7 @@ function ConfigGrid({
 
       <fieldset ref={llmRef}>
         <legend>大模型增强</legend>
-        <p className="helper-text">规则模式无需 API Key，适合快速生成基础报告；开启大模型增强后，可以提升章节总结、高频考点、模拟卷、Anki 卡片和冲刺计划的质量。</p>
+        <p className="helper-text">本地整理模式无需 API Key，适合快速生成本地安全底稿；开启大模型增强后，可以提升章节/专题重组、题型归纳、模拟卷、Anki 卡片和冲刺计划的质量。</p>
         <label className="checkbox-row">
           <input checked={Boolean(llmConfig.enabled)} type="checkbox" onChange={(event) => setLlmConfig({ ...llmConfig, enabled: event.target.checked })} />
           <span>启用大模型增强</span>
@@ -548,6 +656,7 @@ function normalizeOcrConfig(config: OCRConfig): OCRConfig {
   return {
     ...config,
     api_url: config.api_url || null,
+    mode: config.mode || "fast",
     api_key: config.api_key || null,
     secret_key: config.secret_key || null,
     language: config.language || "chi_sim+eng",
@@ -569,6 +678,8 @@ function normalizeLlmConfig(config: LLMConfig): LLMConfig {
 function translateJobMessage(message: string) {
   const lower = message.toLowerCase();
   if (lower.includes("upload")) return "正在上传";
+  if (message.includes("OCR 缓存")) return "已使用 OCR 缓存";
+  if (message.includes("文字版 PDF") || message.includes("跳过 OCR")) return "已检测到文字版 PDF，跳过 OCR";
   if (lower.includes("ocr")) return "正在识别扫描内容";
   if (lower.includes("extract") || lower.includes("parse")) return "正在提取文本";
   if (lower.includes("export")) return "正在导出";

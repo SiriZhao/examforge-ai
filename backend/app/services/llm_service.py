@@ -10,6 +10,8 @@ from app.schemas.review import (
     LLMStatus,
     ReportSource,
     ReviewReport,
+    StudyGoal,
+    ExamType,
 )
 from app.services.llm_providers import get_llm_provider
 from app.services.llm_providers.base import LLMProviderError
@@ -30,8 +32,13 @@ class LLMEnhancementResult:
 
 def generate_review_summary(
     parsed_materials: str,
-    rule_report: ReviewReport,
+    safe_draft: ReviewReport,
     config: LLMConfig,
+    *,
+    course_name: str | None = None,
+    file_texts: list[tuple[str, str]] | None = None,
+    study_goal: StudyGoal = "balanced",
+    exam_type: ExamType = "unknown",
 ) -> LLMEnhancementResult:
     provider_name = config.provider or "deepseek"
     enabled = bool(config.enabled)
@@ -49,7 +56,7 @@ def generate_review_summary(
             fallback_used=False,
         )
         return LLMEnhancementResult(
-            report=sanitize_report(rule_report),
+            report=sanitize_report(safe_draft),
             report_source="rule_based",
             llm_status="disabled",
             fallback_used=False,
@@ -73,7 +80,15 @@ def generate_review_summary(
             fallback_used=False,
             request_started_at=datetime.now().isoformat(timespec="seconds"),
         )
-        enhanced = provider.enhance_report(parsed_materials, rule_report, config)
+        enhanced = provider.enhance_report(
+            parsed_materials,
+            safe_draft,
+            config,
+            course_name=course_name,
+            file_texts=file_texts,
+            study_goal=study_goal,
+            exam_type=exam_type,
+        )
         context_strategy = getattr(provider, "last_context_strategy", "direct")
         elapsed_ms = int((time.perf_counter() - started) * 1000)
         log_llm_event(
@@ -89,7 +104,7 @@ def generate_review_summary(
         )
         return LLMEnhancementResult(
             report=sanitize_report(enhanced),
-            report_source="llm_enhanced",
+            report_source="llm_markdown_fallback" if enhanced.raw_markdown_fallback else "llm_enhanced",
             llm_status="success",
             fallback_used=False,
             llm_error=None,
@@ -109,8 +124,28 @@ def generate_review_summary(
             error_summary=exc.error.message,
             fallback_used=True,
         )
+        outline_report = try_improve_safe_draft_outline(
+            parsed_materials,
+            safe_draft,
+            config,
+            provider_name=provider_name,
+            error_code=exc.error.code,
+            course_name=course_name,
+            file_texts=file_texts,
+            study_goal=study_goal,
+            exam_type=exam_type,
+        )
+        if outline_report is not None:
+            return LLMEnhancementResult(
+                report=outline_report,
+                report_source="local_safe_draft_with_ai_outline",
+                llm_status="failed",
+                fallback_used=True,
+                llm_error=exc.error,
+                llm_context_strategy="failed",
+            )
         return LLMEnhancementResult(
-            report=sanitize_report(rule_report),
+            report=sanitize_report(safe_draft),
             report_source="rule_based_with_llm_failed",
             llm_status="failed",
             fallback_used=True,
@@ -139,14 +174,69 @@ def generate_review_summary(
             error_summary=str(exc)[:200],
             fallback_used=True,
         )
+        outline_report = try_improve_safe_draft_outline(
+            parsed_materials,
+            safe_draft,
+            config,
+            provider_name=provider_name,
+            error_code=error.code,
+            course_name=course_name,
+            file_texts=file_texts,
+            study_goal=study_goal,
+            exam_type=exam_type,
+        )
+        if outline_report is not None:
+            return LLMEnhancementResult(
+                report=outline_report,
+                report_source="local_safe_draft_with_ai_outline",
+                llm_status="failed",
+                fallback_used=True,
+                llm_error=error,
+                llm_context_strategy="failed",
+            )
         return LLMEnhancementResult(
-            report=sanitize_report(rule_report),
+            report=sanitize_report(safe_draft),
             report_source="rule_based_with_llm_failed",
             llm_status="failed",
             fallback_used=True,
             llm_error=error,
             llm_context_strategy="failed",
         )
+
+
+def try_improve_safe_draft_outline(
+    parsed_materials: str,
+    safe_draft: ReviewReport,
+    config: LLMConfig,
+    *,
+    provider_name: str,
+    error_code: str,
+    course_name: str | None,
+    file_texts: list[tuple[str, str]] | None,
+    study_goal: StudyGoal,
+    exam_type: ExamType,
+) -> ReviewReport | None:
+    if error_code in {"CONFIG_MISSING", "AUTH_FAILED"}:
+        return None
+    try:
+        provider = get_llm_provider(provider_name)
+        improve = getattr(provider, "improve_safe_draft_outline", None)
+        if improve is None:
+            return None
+        improved = improve(
+            parsed_materials,
+            safe_draft,
+            config,
+            course_name=course_name,
+            file_texts=file_texts,
+            study_goal=study_goal,
+            exam_type=exam_type,
+        )
+        logger.info("LLM outline naming fallback succeeded.")
+        return sanitize_report(improved)
+    except Exception as exc:
+        logger.info("LLM outline naming fallback skipped: %s", str(exc)[:200])
+        return None
 
 
 def log_llm_event(
