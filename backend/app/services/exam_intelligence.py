@@ -13,20 +13,10 @@ from app.schemas.review import (
     SprintPlan,
 )
 from app.services.chapter_extractor import ChapterSection, DEFAULT_CHAPTER
-from app.services.concept_extractor import extract_keywords
+from app.services.concept_extractor import extract_formulas, extract_keywords
 from app.services.question_extractor import extract_questions
-from app.services.text_cleaner import clean_list, clean_text
-
-
-QUESTION_TYPE_WEIGHTS = {
-    "选择题": 1.0,
-    "填空题": 0.9,
-    "判断题": 0.7,
-    "计算题": 1.3,
-    "简答题": 1.4,
-    "论述题": 1.7,
-    "未知": 0.6,
-}
+from app.services.text_cleaner import clean_text
+from app.services.text_quality import clean_topic_list, clean_topic_name, has_mojibake, looks_like_formula_fragment
 
 
 @dataclass(frozen=True)
@@ -49,7 +39,7 @@ def build_exam_intelligence(
     apply_priority_scores(chapter_reviews, chapters, sources, past_exam_analysis)
     review_order = build_review_order(chapter_reviews)
     sprint_plans = build_sprint_plans(review_order)
-    mock_exam = build_balanced_mock_exam(chapter_reviews, past_exam_analysis)
+    mock_exam = build_evidence_based_mock_exam(chapter_reviews, past_exam_analysis, past_exam_sources)
     anki_cards = build_anki_cards(chapter_reviews, past_exam_analysis)
     return past_exam_analysis, review_order, sprint_plans, mock_exam, anki_cards
 
@@ -57,34 +47,15 @@ def build_exam_intelligence(
 def looks_like_past_exam(filename: str, text: str) -> bool:
     lowered_name = filename.lower()
     lowered_text = text.lower()
-    name_hits = sum(
-        token in lowered_name
-        for token in ["exam", "past", "paper", "mock", "quiz", "test", "试卷", "真题", "往年", "考试"]
-    )
+    name_hits = sum(token in lowered_name for token in ["exam", "past", "paper", "mock", "quiz", "test", "试卷", "真题", "往年", "考试", "练习"])
     text_hits = sum(
         token in lowered_text
-        for token in [
-            "multiple choice",
-            "fill in the blank",
-            "short answer",
-            "essay",
-            "answer key",
-            "选择题",
-            "填空题",
-            "简答题",
-            "论述题",
-            "总分",
-            "考试时间",
-        ]
+        for token in ["multiple choice", "fill in", "short answer", "essay", "answer key", "选择", "填空", "判断", "简答", "论述", "计算", "证明", "总分"]
     )
-    question_count = len(extract_questions(text))
-    return name_hits >= 1 or text_hits >= 2 or question_count >= 4
+    return name_hits >= 1 or text_hits >= 2 or len(extract_questions(text)) >= 4
 
 
-def analyze_past_exams(
-    sources: list[SourceMaterial],
-    chapters: list[ChapterSection],
-) -> PastExamAnalysis:
+def analyze_past_exams(sources: list[SourceMaterial], chapters: list[ChapterSection]) -> PastExamAnalysis:
     topic_scores: dict[tuple[str, str], int] = defaultdict(int)
     topic_types: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
     topic_keywords: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
@@ -92,10 +63,9 @@ def analyze_past_exams(
 
     for source in sources:
         questions = extract_questions(source.text)
-        question_types = Counter(str(question.question_type) for question in questions)
+        question_types = Counter(infer_natural_question_type(question.question, str(question.question_type)) for question in questions)
         matched_chapters = Counter(question.chapter or infer_chapter_from_keywords(question.keywords, chapters) for question in questions)
         confidence = min(100, 35 + len(questions) * 8 + len(question_types) * 8)
-
         detected_files.append(
             PastExamFileAnalysis(
                 filename=source.filename,
@@ -107,38 +77,71 @@ def analyze_past_exams(
         )
 
         for question in questions:
-            chapter = question.chapter or infer_chapter_from_keywords(question.keywords, chapters)
-            keywords = clean_list(question.keywords or extract_keywords(question.question, limit=4), limit=4)
+            chapter = clean_topic_name(question.chapter or infer_chapter_from_keywords(question.keywords, chapters)) or DEFAULT_CHAPTER
+            keywords = clean_topic_list(question.keywords or extract_keywords(question.question, limit=6), limit=5)
             if not keywords:
-                keywords = [chapter]
+                keywords = [clean_topic_name(chapter) or DEFAULT_CHAPTER]
+            q_type = infer_natural_question_type(question.question, str(question.question_type))
             for keyword in keywords:
-                key = (chapter or DEFAULT_CHAPTER, keyword)
-                topic_scores[key] += int(question_type_weight(str(question.question_type)) * 10)
-                topic_types[key][str(question.question_type)] += 1
+                key = (chapter, keyword)
+                topic_scores[key] += 10 + question_type_weight(q_type)
+                topic_types[key][q_type] += 1
                 topic_keywords[key][keyword] += 1
 
-    ranked_topics = sorted(topic_scores.items(), key=lambda item: item[1], reverse=True)
-    topics = [
-        PastExamTopic(
-            topic=clean_text(topic),
-            chapter=clean_text(chapter or DEFAULT_CHAPTER),
-            frequency=max(1, score // 10),
-            question_types=[item for item, _ in topic_types[(chapter, topic)].most_common()],
-            keywords=[item for item, _ in topic_keywords[(chapter, topic)].most_common(5)],
+    topics = []
+    for (chapter, topic), score in sorted(topic_scores.items(), key=lambda item: item[1], reverse=True)[:12]:
+        if not clean_topic_name(topic):
+            continue
+        topics.append(
+            PastExamTopic(
+                topic=topic,
+                chapter=chapter,
+                frequency=max(1, score // 10),
+                question_types=[item for item, _ in topic_types[(chapter, topic)].most_common()],
+                keywords=[item for item, _ in topic_keywords[(chapter, topic)].most_common(5)],
+            )
         )
-        for (chapter, topic), score in ranked_topics[:10]
-    ]
 
-    if detected_files:
-        summary = f"已识别 {len(detected_files)} 个疑似往年题文件，并整理出 {len(topics)} 个反复出现的考试考点。"
-    else:
-        summary = "暂未识别出明显的往年题文件。上传往年题后，可以获得更准确的高频考点分析。"
-
-    return PastExamAnalysis(
-        detected_files=detected_files,
-        high_frequency_topics=topics,
-        summary=summary,
+    summary = (
+        f"已识别 {len(detected_files)} 个疑似往年题/练习题文件，并整理出 {len(topics)} 个反复出现的题型与考点线索。"
+        if detected_files
+        else "暂未识别出明确往年题文件。上传往年题后，系统可以更准确反推题型并生成模拟卷。"
     )
+    return PastExamAnalysis(detected_files=detected_files, high_frequency_topics=topics, summary=summary)
+
+
+def infer_natural_question_type(question: str, detected_type: str = "") -> str:
+    text = clean_text(question)
+    lower = text.lower()
+    if "代码" in text or "程序" in text or "输出" in text or "debug" in lower:
+        return "代码阅读与调试题"
+    if "证明" in text or "推导" in text:
+        return "推导证明题"
+    if "计算" in text or "求" in text or any(symbol in text for symbol in ["=", "P(", "E(", "Var", "∫", "∑"]):
+        if "概率" in text or "随机" in text or "分布" in text:
+            return "概率建模与计算题"
+        return "公式应用计算题"
+    if "分析" in text or "解释" in text or "为什么" in text or "说明" in text:
+        return "材料分析与解释题"
+    if "比较" in text or "区别" in text or "辨析" in text:
+        return "概念辨析题"
+    if "实验" in text or "现象" in text or "误差" in text:
+        return "实验观察分析题"
+    if "选择" in detected_type or "choice" in lower:
+        return "材料选择判断题"
+    if "填" in detected_type or "blank" in lower:
+        return "关键概念填空题"
+    if "论述" in detected_type or "essay" in lower:
+        return "论述框架题"
+    return clean_topic_name(detected_type) or "综合问答题"
+
+
+def question_type_weight(question_type: str) -> int:
+    if any(token in question_type for token in ["计算", "证明", "推导", "编程", "实验", "分析"]):
+        return 6
+    if any(token in question_type for token in ["论述", "辨析"]):
+        return 5
+    return 3
 
 
 def apply_priority_scores(
@@ -147,41 +150,21 @@ def apply_priority_scores(
     sources: list[SourceMaterial],
     past_exam_analysis: PastExamAnalysis,
 ) -> None:
-    non_exam_text = "\n\n".join(source.text for source in sources if not looks_like_past_exam(source.filename, source.text))
-    if not non_exam_text:
-        non_exam_text = "\n\n".join(source.text for source in sources)
-
+    all_text = "\n\n".join(source.text for source in sources)
     exam_topic_by_chapter = Counter()
-    type_weight_by_chapter = Counter()
     for topic in past_exam_analysis.high_frequency_topics:
         exam_topic_by_chapter[topic.chapter] += topic.frequency
-        type_weight_by_chapter[topic.chapter] += sum(question_type_weight(item) for item in topic.question_types) or 1
-
-    max_material = 1
-    material_counts: dict[str, int] = {}
-    for review in chapter_reviews:
-        title_hits = non_exam_text.lower().count(review.chapter.lower()) if review.chapter else 0
-        keyword_hits = sum(non_exam_text.lower().count(keyword.lower()) for keyword in review.keywords[:8])
-        chapter_text_hits = next((len(ch.text) // 180 for ch in chapters if ch.title == review.chapter), 0)
-        material_count = max(0, title_hits + keyword_hits + chapter_text_hits)
-        material_counts[review.chapter] = material_count
-        max_material = max(max_material, material_count)
-
     max_exam = max(exam_topic_by_chapter.values(), default=1)
-    max_type_weight = max(type_weight_by_chapter.values(), default=1)
 
     for review in chapter_reviews:
-        material_frequency = material_counts.get(review.chapter, 0)
-        past_exam_frequency = exam_topic_by_chapter.get(review.chapter, 0)
-        material_score = (material_frequency / max_material) * 35
-        exam_score = (past_exam_frequency / max_exam) * 45 if max_exam else 0
-        type_score = (type_weight_by_chapter.get(review.chapter, 0) / max_type_weight) * 20 if max_type_weight else 0
-        score = int(round(material_score + exam_score + type_score))
-        review.material_frequency = material_frequency
-        review.past_exam_frequency = past_exam_frequency
-        review.weighted_score = min(100, max(score, review.importance))
+        keyword_hits = sum(all_text.lower().count(keyword.lower()) for keyword in review.keywords[:8])
+        material_score = min(35, keyword_hits)
+        exam_score = int((exam_topic_by_chapter.get(review.chapter, 0) / max_exam) * 45) if max_exam else 0
+        score = max(review.importance, material_score + exam_score + min(20, len(review.keywords) * 2))
+        review.material_frequency = keyword_hits
+        review.past_exam_frequency = exam_topic_by_chapter.get(review.chapter, 0)
+        review.weighted_score = min(100, score)
         review.importance = review.weighted_score
-
     chapter_reviews.sort(key=lambda item: item.importance, reverse=True)
 
 
@@ -190,101 +173,196 @@ def build_review_order(chapter_reviews: list[ChapterReview]) -> list[ReviewPlanI
         ReviewPlanItem(
             chapter=review.chapter,
             importance=review.importance,
-            reason=(
-                f"材料命中 {review.material_frequency} 次，往年题命中 {review.past_exam_frequency} 次，"
-                f"题型包括 {'、'.join(str(item) for item in review.question_types) or '未知'}。"
-            ),
+            reason=f"材料命中 {review.material_frequency} 次，往年题线索 {review.past_exam_frequency} 次；建议结合题型和错题优先复习。",
         )
         for review in sorted(chapter_reviews, key=lambda item: item.importance, reverse=True)
     ]
 
 
 def build_sprint_plans(review_order: list[ReviewPlanItem]) -> list[SprintPlan]:
-    top = review_order[:6] or [ReviewPlanItem(chapter=DEFAULT_CHAPTER, importance=0, reason="当前材料不足。")]
-    one_day = [f"{index + 1}. 优先复习 {item.chapter}（{item.importance}/100）。" for index, item in enumerate(top[:3])]
-
-    three_day = []
-    chunks = [top[:2], top[2:4], top[4:6]]
-    for day, items in enumerate(chunks, start=1):
-        names = "、".join(item.chapter for item in items) if items else "错题、薄弱点和导出报告"
-        three_day.append(f"第 {day} 天：集中复习 {names}；最后用主动回忆题自测。")
-
-    seven_day = []
-    for day in range(1, 8):
-        item = top[(day - 1) % len(top)]
-        seven_day.append(f"第 {day} 天：复习 {item.chapter}，制作记忆卡片，并重做 1 道考试风格题。")
-
+    top = review_order[:6] or [ReviewPlanItem(chapter=DEFAULT_CHAPTER, importance=0, reason="当前材料较少。")]
     return [
-        SprintPlan(days=1, title="1 天紧急冲刺", schedule=one_day),
-        SprintPlan(days=3, title="3 天均衡冲刺", schedule=three_day),
-        SprintPlan(days=7, title="7 天完整冲刺", schedule=seven_day),
+        SprintPlan(days=1, title="1 天速通计划", schedule=[f"优先复习 {item.chapter}，再做 1 道对应练习题。" for item in top[:3]]),
+        SprintPlan(days=3, title="3 天冲刺计划", schedule=[
+            "Day 1：整理核心概念和公式，完成 Anki 首轮复习。",
+            "Day 2：按题型练习，重点处理往年题线索。",
+            "Day 3：完成保守模拟卷，核对答案并回看易错点。",
+        ]),
+        SprintPlan(days=7, title="7 天系统复习计划", schedule=[
+            "前 3 天：按专题建立知识结构。",
+            "第 4-5 天：按题型训练并补足薄弱点。",
+            "第 6 天：集中背诵 Anki 和公式/定义。",
+            "第 7 天：做模拟卷并整理最后清单。",
+        ]),
     ]
 
 
-def build_balanced_mock_exam(
+def build_evidence_based_mock_exam(
     chapter_reviews: list[ChapterReview],
     past_exam_analysis: PastExamAnalysis,
+    past_exam_sources: list[SourceMaterial],
 ) -> GeneratedMockExam:
-    ordered = sorted(chapter_reviews, key=lambda item: item.importance, reverse=True)
-    topics = past_exam_analysis.high_frequency_topics
-    if not ordered:
-        return GeneratedMockExam(title="模拟卷", questions=[])
-
-    specs = [
-        ("选择题", 4),
-        ("填空题", 3),
-        ("简答题", 3),
-        ("论述题", 1),
-    ]
     questions: list[GeneratedExamQuestion] = []
-    topic_index = 0
-    for question_type, count in specs:
-        for _ in range(count):
-            chapter = ordered[len(questions) % len(ordered)]
-            concept = (
-                topics[topic_index % len(topics)].topic
-                if topics
-                else (chapter.keywords[0] if chapter.keywords else chapter.chapter)
-            )
-            topic_index += 1
+    source_questions = [question for source in past_exam_sources for question in extract_questions(source.text)]
+    type_order = [item for file in past_exam_analysis.detected_files for item in file.question_types]
+    topic_order = past_exam_analysis.high_frequency_topics
+
+    if source_questions:
+        seen_types: set[str] = set()
+        for index, source_question in enumerate(source_questions[:8], start=1):
+            q_type = infer_natural_question_type(source_question.question, str(source_question.question_type))
+            topic = clean_topic_list(source_question.keywords, limit=1)
+            chapter = clean_topic_name(source_question.chapter) or (chapter_reviews[0].chapter if chapter_reviews else DEFAULT_CHAPTER)
+            concept = topic[0] if topic else chapter
+            if q_type in seen_types and len(questions) >= 3:
+                continue
+            seen_types.add(q_type)
             questions.append(
                 GeneratedExamQuestion(
-                    question_type=question_type,
-                    question=make_mock_question(question_type, chapter.chapter, concept),
-                    answer=make_mock_answer(question_type, chapter.chapter, concept),
-                    chapter=chapter.chapter,
+                    question_type=q_type,
+                    type=q_type,
+                    difficulty=source_question.difficulty,
+                    question=build_practice_question_from_source(source_question.question, q_type, concept),
+                    answer=build_grounded_answer(q_type, concept, chapter),
+                    explanation=f"此题根据上传材料中的真实题干结构改写，重点检查 {concept} 的理解和应用。",
+                    chapter=chapter,
                     concept=concept,
+                    related_topic=concept,
+                    source_hint="已参考上传的往年题型线索生成",
+                    source_basis="来自往年题型线索",
                 )
             )
-    return GeneratedMockExam(title="ExamForge AI 模拟卷", questions=questions)
+            if len(questions) >= 6:
+                break
+
+    if len(questions) < 4:
+        for item in topic_order[:6]:
+            q_type = item.question_types[0] if item.question_types else "综合问答题"
+            q_type = infer_natural_question_type(" ".join([item.topic, q_type]), q_type)
+            questions.append(
+                GeneratedExamQuestion(
+                    question_type=q_type,
+                    type=q_type,
+                    difficulty="中等",
+                    question=f"围绕“{item.topic}”，说明其核心含义、适用条件，并结合材料给出一个可能的考查角度。",
+                    answer=f"应先解释 {item.topic} 的定义或方法，再说明它在 {item.chapter} 中的作用，最后补充典型考法或易错点。",
+                    explanation="该题来自往年题高频考点线索，用于训练同类考法的答题结构。",
+                    chapter=item.chapter,
+                    concept=item.topic,
+                    related_topic=item.topic,
+                    source_hint="已参考上传的往年题型线索生成",
+                    source_basis="来自往年题型线索",
+                )
+            )
+            if len(questions) >= 6:
+                break
+
+    if not questions:
+        for review in chapter_reviews[:4]:
+            concept = next((item for item in review.keywords if clean_topic_name(item)), review.chapter)
+            questions.append(
+                conservative_question(review.chapter, concept)
+            )
+
+    return GeneratedMockExam(title="基于材料的保守练习卷", questions=dedupe_questions(questions)[:8])
 
 
-def build_anki_cards(
-    chapter_reviews: list[ChapterReview],
-    past_exam_analysis: PastExamAnalysis,
-) -> list[AnkiCard]:
+def build_practice_question_from_source(source_question: str, question_type: str, concept: str) -> str:
+    clean = clean_text(source_question)
+    if len(clean) >= 18 and not has_mojibake(clean) and not looks_like_formula_fragment(clean):
+        return f"参考同类题型：{clean[:180]}"
+    return f"根据上传题型线索，围绕“{concept}”完成一道{question_type}，要求写出关键步骤和理由。"
+
+
+def build_grounded_answer(question_type: str, concept: str, chapter: str) -> str:
+    return f"参考答案应包含：1. 明确 {concept} 的含义；2. 结合 {chapter} 中的材料证据说明解题思路；3. 给出结论并标出易错点。"
+
+
+def conservative_question(chapter: str, concept: str) -> GeneratedExamQuestion:
+    return GeneratedExamQuestion(
+        question_type="基于材料生成的保守练习题",
+        type="基于材料生成的保守练习题",
+        difficulty="基础",
+        question=f"根据材料，解释“{concept}”在“{chapter}”中的含义、作用和一个可能考法。",
+        answer=f"应回答 {concept} 的核心定义或方法，说明它与 {chapter} 的关系，并补充材料中出现的关键词或例题线索。",
+        explanation="当前材料不足以稳定还原真实题型，因此使用保守练习题，避免编造往年题形式。",
+        chapter=chapter,
+        concept=concept,
+        related_topic=concept,
+        source_hint="基于材料生成，非真实往年题",
+        source_basis="基于材料生成，非真实往年题",
+    )
+
+
+def dedupe_questions(questions: list[GeneratedExamQuestion]) -> list[GeneratedExamQuestion]:
+    result: list[GeneratedExamQuestion] = []
+    seen: set[str] = set()
+    for question in questions:
+        key = clean_text(question.question)[:80]
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(question)
+    return result
+
+
+def build_anki_cards(chapter_reviews: list[ChapterReview], past_exam_analysis: PastExamAnalysis) -> list[AnkiCard]:
     cards: list[AnkiCard] = []
-    for topic in past_exam_analysis.high_frequency_topics[:12]:
+    for topic in past_exam_analysis.high_frequency_topics[:10]:
         cards.append(
             AnkiCard(
-                front=f"关于 {topic.topic} 需要掌握什么？",
-                back=f"所属章节：{topic.chapter}。常见题型：{'、'.join(topic.question_types) or '未知'}。",
-                tags=tagify(topic.chapter, "past_exam"),
+                front=f"{topic.topic} 常见考法是什么？",
+                back=f"{topic.topic} 常与 {topic.chapter} 相关。复习时先掌握定义或方法，再练习 {', '.join(topic.question_types) or '材料分析题'}，注意写出依据和步骤。",
+                tags=tagify(topic.chapter, "题型线索"),
+                card_type="question_pattern",
+                priority=85,
+                source_hint="来自往年题型线索",
             )
         )
 
     for chapter in chapter_reviews:
-        for keyword in chapter.keywords[:3]:
+        formulas = [item for item in chapter.formulas if item]
+        for formula in formulas[:2]:
             cards.append(
                 AnkiCard(
-                    front=f"解释：{keyword}",
-                    back=f"{keyword} 是 {chapter.chapter} 的关键概念。复习建议：{chapter.review_advice}",
-                    tags=tagify(chapter.chapter, "concept"),
+                    front=f"{chapter.chapter} 中公式“{formula[:32]}”如何使用？",
+                    back=f"先说明公式适用条件，再列出变量含义，最后结合题目数据代入。若 OCR 公式不完整，请回到原材料核对。",
+                    tags=tagify(chapter.chapter, "公式"),
+                    card_type="formula",
+                    priority=80,
+                    source_hint="来自材料公式/方法线索",
                 )
             )
-            if len(cards) >= 24:
-                return cards
-    return cards
+        for keyword in clean_topic_list(chapter.keywords, limit=3):
+            cards.append(
+                AnkiCard(
+                    front=f"{keyword} 与 {chapter.chapter} 的关系是什么？",
+                    back=f"{keyword} 是复习“{chapter.chapter}”时需要定位的核心概念。答题时应说明其定义、适用场景，并结合材料中的题干或例子展开。",
+                    tags=tagify(chapter.chapter, "概念"),
+                    card_type="definition",
+                    priority=72,
+                    source_hint="来自材料关键词线索",
+                )
+            )
+            if len(cards) >= 36:
+                return dedupe_anki(cards)
+    return dedupe_anki(cards)
+
+
+def dedupe_anki(cards: list[AnkiCard]) -> list[AnkiCard]:
+    result: list[AnkiCard] = []
+    seen: set[str] = set()
+    for card in cards:
+        if "关于 " in card.front and "需要掌握什么" in card.front:
+            continue
+        if len(card.front) < 6 or len(card.back) < 18:
+            continue
+        key = card.front.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(card)
+    return result
 
 
 def infer_chapter_from_keywords(keywords: list[str], chapters: list[ChapterSection]) -> str:
@@ -302,48 +380,6 @@ def infer_chapter_from_keywords(keywords: list[str], chapters: list[ChapterSecti
     return best or DEFAULT_CHAPTER
 
 
-def question_type_weight(question_type: str) -> float:
-    normalized = normalize_question_type(question_type)
-    return QUESTION_TYPE_WEIGHTS.get(normalized, QUESTION_TYPE_WEIGHTS["未知"])
-
-
-def normalize_question_type(question_type: str) -> str:
-    lower = question_type.lower()
-    if "选择" in question_type or "choice" in lower:
-        return "选择题"
-    if "填" in question_type or "blank" in lower:
-        return "填空题"
-    if "判断" in question_type:
-        return "判断题"
-    if "计算" in question_type:
-        return "计算题"
-    if "论" in question_type or "essay" in lower:
-        return "论述题"
-    if "答" in question_type or "answer" in lower:
-        return "简答题"
-    return "未知"
-
-
-def make_mock_question(question_type: str, chapter: str, concept: str) -> str:
-    if question_type == "选择题":
-        return f"以下哪一项最能解释 {chapter} 中的“{concept}”？A. 核心定义 B. 无关细节 C. 相反说法 D. 随机例子"
-    if question_type == "填空题":
-        return f"在 {chapter} 中，与“{concept}”相关的核心结论是：______。"
-    if question_type == "论述题":
-        return f"结合材料论述“{concept}”如何影响 {chapter} 的主要考试逻辑，并说明常见误区。"
-    return f"解释 {chapter} 中的“{concept}”，并说明它可能如何出现在考试题中。"
-
-
-def make_mock_answer(question_type: str, chapter: str, concept: str) -> str:
-    if question_type == "选择题":
-        return f"参考答案：A。应选择最符合“{concept}”定义、条件和考试语境的选项。"
-    if question_type == "填空题":
-        return f"参考答案：填写 {chapter} 中与“{concept}”对应的核心术语或结论。"
-    if question_type == "论述题":
-        return f"参考答案：先定义“{concept}”，再联系 {chapter}，比较相关概念，并指出常见考试陷阱。"
-    return f"参考答案：说明“{concept}”的定义、在 {chapter} 中的作用，并补充一个例子或适用边界。"
-
-
 def tagify(chapter: str, suffix: str) -> str:
-    safe = "".join(char.lower() if char.isalnum() else "_" for char in chapter).strip("_")
-    return f"{safe or 'chapter'} {suffix}"
+    pieces = clean_topic_list([chapter, suffix], limit=2)
+    return " ".join(pieces) or "ExamForge"

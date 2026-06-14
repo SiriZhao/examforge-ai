@@ -4,7 +4,7 @@ from urllib.parse import quote
 from app.services.text_cleaner import clean_text
 
 FORMULA_SYMBOLS = set("=+-*/%^√∑∫≤≥<>[]{}()（）,.，;；:：|\\")
-BAD_TITLE_LITERALS = {"未识别章节", "其他", "未知", "N/A", "NA", "none", "null"}
+BAD_TITLE_LITERALS = {"未识别章节", "其他", "未知", "每题", "的值", "系主任 出卷人", "则袋中白球的", "N/A", "NA", "none", "null"}
 MOJIBAKE_MARKERS = ("锟", "鎵", "锘", "Ã", "ä", "å", "ç", "�", "鈭", "鈮", "閿", "莽", "氓")
 WINDOWS_FORBIDDEN_FILENAME_CHARS = r'\/:*?"<>|'
 

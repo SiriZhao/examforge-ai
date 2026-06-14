@@ -22,6 +22,7 @@ const TABS: Array<{ id: ReportTab; label: string }> = [
   { id: "overview", label: "总览" },
   { id: "priority", label: "复习单元" },
   { id: "topics", label: "高频考点" },
+  { id: "questionTypes", label: "题型分析" },
   { id: "mock", label: "模拟卷" },
   { id: "anki", label: "Anki 卡片" },
   { id: "markdown", label: "Markdown 预览" },
@@ -126,7 +127,7 @@ export function ReportView({
 
       <QualityPanel result={result} />
       <GenerationSummaryPanel result={result} />
-      <QuestionTypesPanel result={result} />
+      <MockExamBasisNotice result={result} />
 
       {report.insufficient_materials.length > 0 && (
         <div className="warning-box">
@@ -165,6 +166,7 @@ export function ReportView({
       {activeTab === "overview" && <OverviewTab result={result} />}
       {activeTab === "priority" && <PriorityTab result={result} />}
       {activeTab === "topics" && <TopicsTab result={result} />}
+      {activeTab === "questionTypes" && <QuestionTypesPanel result={result} />}
       {activeTab === "mock" && <MockExamTab result={result} />}
       {activeTab === "anki" && <AnkiTab result={result} />}
       {activeTab === "markdown" && <MarkdownView markdown={result.markdown} />}
@@ -302,6 +304,34 @@ function GenerationSummaryPanel({ result }: { result: GenerateReviewResponse }) 
   );
 }
 
+function MockExamBasisNotice({ result }: { result: GenerateReviewResponse }) {
+  const report = result.review_report;
+  const conservative = report.overview?.mock_exam_mode === "conservative";
+  const hasPastExam = report.past_exam_analysis.detected_files.length > 0;
+  if (conservative) {
+    return (
+      <div className="warning-box">
+        <strong>模拟卷依据：保守练习题模式</strong>
+        <p>当前材料不足以稳定还原真实题型，系统已生成保守练习题。建议上传更多往年题或开启 AI 深度整理，以获得更贴近考试的模拟卷。</p>
+      </div>
+    );
+  }
+  if (hasPastExam) {
+    return (
+      <div className="success-box">
+        <strong>模拟卷依据：已参考上传的往年题型线索生成</strong>
+        <p>系统会优先使用真实题干结构、题型分布和高频考点来组织模拟题，避免固定模板凑题。</p>
+      </div>
+    );
+  }
+  return (
+    <div className="info-box">
+      <strong>模拟卷依据：基于课程材料生成</strong>
+      <p>当前未检测到明确往年题。上传往年试卷并开启 AI 深度整理后，题型归纳和模拟卷质量通常会明显提升。</p>
+    </div>
+  );
+}
+
 function QuestionTypesPanel({ result }: { result: GenerateReviewResponse }) {
   const items = result.review_report.question_types ?? [];
   if (items.length === 0) return null;
@@ -309,11 +339,17 @@ function QuestionTypesPanel({ result }: { result: GenerateReviewResponse }) {
     <section className="mini-section">
       <h3>题型分析</h3>
       {items.map((item) => (
-        <article key={item.name} className="mini-section">
-          <h4>{item.name} <span className="score-pill">{item.confidence ?? 70}</span></h4>
-          <p>{item.evidence}</p>
+        <article key={item.name} className="question-type-card">
+          <div className="section-header compact">
+            <h4>{item.name}</h4>
+            <span className="score-pill">{item.confidence ?? 70}</span>
+          </div>
+          <p>{item.evidence || (item.is_from_past_exam ? "来自往年题线索" : "根据课程材料推测的练习题型")}</p>
+          {item.features?.length > 0 && <BadgeList items={item.features} />}
           <p className="muted">{item.answer_strategy}</p>
           {item.related_topics?.length > 0 && <p className="muted">相关考点：{item.related_topics.join("、")}</p>}
+          {item.sample_questions?.length > 0 && <p className="muted">样例题：{item.sample_questions.join("；")}</p>}
+          {item.practice_suggestions && <p className="muted">练习方式：{item.practice_suggestions}</p>}
         </article>
       ))}
     </section>
@@ -443,23 +479,43 @@ function TopicsTab({ result }: { result: GenerateReviewResponse }) {
 
 function MockExamTab({ result }: { result: GenerateReviewResponse }) {
   return (
-    <div className="mock-exam tab-panel">
+    <div className="mock-exam-list tab-panel">
       <div className="section-header compact">
         <h3>模拟卷与参考答案</h3>
-        <span className="muted">已包含在 Markdown 和 Word 导出文件中。</span>
+        <span className="muted">题目、答案、解析和来源依据会一起导出。</span>
       </div>
       {result.review_report.mock_exam.questions.map((question, index) => (
-        <article key={`${question.question_type}-${index}`}>
-          <strong>{index + 1}. {question.question_type}</strong>
-          <p>{question.question}</p>
-          <p className="muted">参考答案：{question.answer}</p>
-          {question.explanation && <p className="muted">解析：{question.explanation}</p>}
+        <article key={`${question.question_type}-${index}`} className="mock-question-card">
+          <div className="mock-question-meta">
+            <span className="question-index">{index + 1}</span>
+            <strong>{question.type || question.question_type}</strong>
+            <span>{question.difficulty || "中等"}</span>
+          </div>
+          <p className="question-stem">{question.question}</p>
+          {(question.options ?? []).length > 0 && (
+            <ol className="option-list">
+              {(question.options ?? []).map((option, optionIndex) => (
+                <li key={`${option}-${optionIndex}`}>{option}</li>
+              ))}
+            </ol>
+          )}
+          <div className="answer-block">
+            <strong>参考答案</strong>
+            <p>{question.answer || "—"}</p>
+          </div>
+          <div className="answer-block">
+            <strong>解析</strong>
+            <p>{question.explanation || "—"}</p>
+          </div>
+          <div className="mock-footnotes">
+            <span>相关考点：{question.related_topic || question.concept || "—"}</span>
+            <span>来源依据：{question.source_basis || question.source_hint || "基于材料生成"}</span>
+          </div>
         </article>
       ))}
     </div>
   );
 }
-
 function AnkiTab({ result }: { result: GenerateReviewResponse }) {
   return (
     <div className="tab-panel">
@@ -477,17 +533,17 @@ function AnkiTab({ result }: { result: GenerateReviewResponse }) {
           </a>
         )}
       </div>
-      <div className="table-wrap">
+      <div className="table-wrap anki-table-wrap">
         <table>
           <thead>
-            <tr><th>正面</th><th>背面</th><th>标签</th></tr>
+            <tr><th>Front</th><th>Back</th><th>Tags</th></tr>
           </thead>
           <tbody>
             {result.review_report.anki_cards.map((card) => (
               <tr key={`${card.front}-${card.tags}`}>
-                <td>{card.front}</td>
-                <td>{card.back}</td>
-                <td>{card.tags}</td>
+                <td>{card.front || "—"}</td>
+                <td>{card.back || "—"}</td>
+                <td><BadgeList items={String(card.tags || "—").split(/\s+/).filter(Boolean)} /></td>
               </tr>
             ))}
           </tbody>
@@ -499,4 +555,15 @@ function AnkiTab({ result }: { result: GenerateReviewResponse }) {
 
 function MetricCard({ label, value }: { label: string; value: number }) {
   return <div className="metric-card"><strong>{value}</strong><span>{label}</span></div>;
+}
+
+function BadgeList({ items }: { items: string[] }) {
+  const cleanItems = items.length > 0 ? items : ["—"];
+  return (
+    <div className="badge-list">
+      {cleanItems.map((item, index) => (
+        <span key={`${item}-${index}`} className="soft-badge">{item}</span>
+      ))}
+    </div>
+  );
 }

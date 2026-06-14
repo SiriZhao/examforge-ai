@@ -72,7 +72,7 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         ).to_dict()
         chunk_insights = self.build_chunk_insights(endpoint, model, config, materials_text, prepared.needs_chunking)
         prompt = build_review_prompt(evidence_pack, safe_draft, chunk_insights, study_goal=study_goal, exam_type=exam_type)
-        if len(prompt) > MAX_LLM_INPUT_CHARS + 12000:
+        if len(prompt) > MAX_LLM_INPUT_CHARS:
             raise self.error(
                 "CONTEXT_TOO_LONG",
                 "资料过长，大模型深度整理未完成。",
@@ -797,8 +797,10 @@ def normalize_v030_fields(data: dict) -> None:
         if not isinstance(item, dict):
             continue
         item.setdefault("type", item.get("question_type", "综合题"))
+        item["options"] = [str(part).strip() for part in listify(item.get("options")) if str(part).strip()]
         item.setdefault("related_topic", item.get("concept") or item.get("chapter", ""))
         item.setdefault("source_hint", "来自材料证据和题型线索")
+        item.setdefault("source_basis", item.get("source_hint", "来自材料证据"))
     seen_cards: set[str] = set()
     cards = []
     for item in data.get("anki_cards", []) or []:

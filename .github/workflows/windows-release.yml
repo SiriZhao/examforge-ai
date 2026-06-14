@@ -95,7 +95,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ExamForgeAI-installer
-          path: dist/installer/ExamForgeAISetup-0.3.1.exe
+          path: dist/installer/ExamForgeAISetup-0.3.2.exe
           if-no-files-found: error
 
       - name: Create GitHub Release
@@ -106,4 +106,4 @@ jobs:
           generate_release_notes: true
           files: |
             dist/ExamForgeAI.exe
-            dist/installer/ExamForgeAISetup-0.3.1.exe
+            dist/installer/ExamForgeAISetup-0.3.2.exe

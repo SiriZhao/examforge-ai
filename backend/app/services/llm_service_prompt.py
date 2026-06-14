@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from app.schemas.review import ExamType, ReviewReport, StudyGoal
 
-MAX_LLM_INPUT_CHARS = 30000
-MAX_CHUNK_CHARS = 8000
-MAX_CHUNKS = 8
+MAX_LLM_INPUT_CHARS = 42000
+MAX_CHUNK_CHARS = 10000
+MAX_CHUNKS = 10
 CONTEXT_TOO_LONG_MESSAGE = "资料过长，大模型深度整理未完成。系统已保留本地安全底稿。建议分批上传课件、教材和往年题后分别生成。"
 
 
@@ -64,12 +64,13 @@ def build_review_prompt(
 考试类型：{exam_type}
 考试策略：{exam_instruction}
 
-v0.3.1 输出要求：
+v0.3.2 输出要求：
 - 报告必须体现复习目标和考试类型差异。
 - question_types 需要包含 name、confidence、evidence、evidence_sources、features、related_topics、answer_strategy、sample_questions、practice_suggestions、is_from_past_exam。
-- mock_exam.questions 每题需要 question_type/type、difficulty、question、answer、explanation、related_topic、source_hint。
+- mock_exam.questions 每题需要 question_type/type、difficulty、question、options、answer、explanation、related_topic、source_hint、source_basis。
 - anki_cards 需要 front、back、tags、card_type、priority、source_hint，Front 不要过长，Back 必须能独立理解。
 - 如果 study_goal 是 anki_focused，请增加高质量 Anki；如果是 practice_heavy，请增加题目和解析；如果 exam_type 是 programming，请包含代码阅读、输出判断、函数补全、Debug 或编程实现；如果 exam_type 是 essay_based，请包含论述框架。
+- 质量优先于节省 token。必须优先保留往年题题干、题型线索、高频考点、公式/定义/代码片段、chunk_insights 和 local_safe_draft。
 
 你是资深大学期末复习资料整理专家，不是普通摘要助手。
 
@@ -88,10 +89,10 @@ v0.3.1 输出要求：
 必须遵守：
 1. 不要固定套用“第 X 章”“主题 1”这类机械标题，除非材料本身清楚使用这些标题。
 2. 不要把题型强行归入固定题型库。题型名称要根据材料和题干自然命名，例如“概念辨析题”“公式套用计算题”“实验设计题”等。
-3. 不要捏造材料中完全没有依据的专业知识；如果是根据材料生成的练习题型，请明确其为“根据材料生成的练习题型”。
+3. 可以使用基础学科常识补足解释，但必须优先依据用户上传材料，避免捏造材料中不存在的具体事实；如果是根据材料生成的练习题型，请明确其为“根据材料生成的练习题型”。
 4. OCR 可能有错字和噪声，请结合上下文修正，不要机械照抄乱码。
 5. 报告必须具体、可复习、可导出，不能只有空泛摘要。
-6. 模拟卷至少包含 3 类不同题型，除非材料极少；每题必须有答案和解析。
+6. 如果有往年题或练习题，模拟卷必须优先参考真实题干结构和题型线索；如果材料不足，宁可生成较少的保守练习题，也不要用万能模板凑数量。每题必须有答案、解析、相关考点和来源依据。
 7. Anki 卡片必须字段干净，适合 CSV 导出。
 8. 不承诺押题必中，不承诺提分。
 9. 优先只输出一个合法 JSON 对象，不要输出 Markdown 代码块或解释文字。
@@ -154,7 +155,7 @@ JSON 需要兼容以下字段：
 
 兼容要求：
 - chapters 可以由 study_units 映射生成，但章节名必须自然可复习。
-- mock_exam.questions 每项包含 question_type、question、answer、explanation、chapter、concept、difficulty。
+- mock_exam.questions 每项包含 question_type、type、question、options、answer、explanation、chapter、concept、difficulty、related_topic、source_hint、source_basis。
 - anki_cards 每项包含 front、back、tags；tags 可以是字符串。
 - markdown 必须是最终可导出的完整正文，不要包含 evidence_pack 或 chunk_insights 原文。
 

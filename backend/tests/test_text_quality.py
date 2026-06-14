@@ -35,7 +35,7 @@ def test_formula_fragments_are_preserved_as_content() -> None:
 
 
 def test_bad_high_frequency_topic_names_are_filtered() -> None:
-    values = ["每题", "的值", "其他", "未知", "2 ( ) 2[ ( ) ( )] 2u du□", "随机变量", "概率密度"]
+    values = ["每题", "的值", "其他", "未知", "系主任 出卷人", "则袋中白球的", "2 ( ) 2[ ( ) ( )] 2u du□", "随机变量", "概率密度"]
 
     assert clean_topic_list(values, limit=10) == ["随机变量", "概率密度"]
 

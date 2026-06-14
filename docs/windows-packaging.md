@@ -41,7 +41,7 @@ Expected outputs:
 
 ```text
 dist/ExamForgeAI.exe
-dist/installer/ExamForgeAISetup-0.3.1.exe
+dist/installer/ExamForgeAISetup-0.3.2.exe
 ```
 
 If Inno Setup is not installed, the script still produces `dist/ExamForgeAI.exe`.
@@ -79,14 +79,14 @@ Recommended release checklist:
    ```
 
 2. Smoke test `dist/ExamForgeAI.exe` on the build machine.
-3. Test the installer `dist/installer/ExamForgeAISetup-0.3.1.exe`.
+3. Test the installer `dist/installer/ExamForgeAISetup-0.3.2.exe`.
 4. Ideally test on a clean Windows VM without Python and Node.js installed.
-5. Create a GitHub Release named `v0.3.1`.
+5. Create a GitHub Release named `v0.3.2`.
 6. Upload:
 
    ```text
    dist/ExamForgeAI.exe
-   dist/installer/ExamForgeAISetup-0.3.1.exe
+   dist/installer/ExamForgeAISetup-0.3.2.exe
    ```
 
 7. Include release notes:

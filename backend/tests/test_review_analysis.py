@@ -54,10 +54,10 @@ def test_generate_review_report_with_exam_intelligence() -> None:
     assert report.past_exam_analysis.high_frequency_topics
     assert report.review_order
     assert {plan.days for plan in report.sprint_plans} == {1, 3, 7}
-    assert report.mock_exam.questions
-    assert {"选择题", "填空题", "简答题", "论述题"} <= {
-        question.question_type for question in report.mock_exam.questions
-    }
+    question_types = {question.question_type for question in report.mock_exam.questions}
+    assert len(question_types) >= 2
+    assert not question_types <= {"选择题", "填空题", "判断题", "简答题", "计算题", "论述题"}
+    assert all(question.source_basis for question in report.mock_exam.questions)
     assert report.anki_cards
     assert report.anki_cards[0].front
     assert report.anki_cards[0].back

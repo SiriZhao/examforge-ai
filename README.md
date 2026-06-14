@@ -38,7 +38,7 @@ ExamForge AI 的目标是把这些零散材料整理成更可执行的复习输�
 
 Most AI document tools answer questions. ExamForge AI focuses on producing structured review outputs.
 
-## v0.3.1 新能力
+## v0.3.2 新能力
 
 - 复习目标选择：1 天速通、3 天冲刺、7 天系统复习、重点背诵、重点刷题、Anki 整理、往年题抓重点和平衡模式。
 - 考试类型选择：闭卷、开卷、机考、编程、实验、论文/论述、口试/展示、课程论文/报告。
@@ -284,7 +284,7 @@ npm run build
 
 发布 GitHub Release 后，普通用户可以从 Release 页面下载以下文件：
 
-- `ExamForgeAISetup-0.3.1.exe`：推荐普通用户下载，安装后从开始菜单启动。
+- `ExamForgeAISetup-0.3.2.exe`：推荐普通用户下载，安装后从开始菜单启动。
 - `ExamForgeAI.exe`：便携版，可直接运行测试。
 
 安装后启动：
@@ -329,7 +329,7 @@ ExamForge AI 期末复习资料生成器
 
 ```text
 dist\ExamForgeAI.exe
-dist\installer\ExamForgeAISetup-0.3.1.exe
+dist\installer\ExamForgeAISetup-0.3.2.exe
 ```
 
 打包说明见：
@@ -340,11 +340,11 @@ docs/windows-packaging.md
 
 ## GitHub Release
 
-推送形如 `v0.3.1` 的 tag 后，GitHub Actions 会尝试在 Windows 环境中构建 exe 并创建 Release：
+推送形如 `v0.3.2` 的 tag 后，GitHub Actions 会尝试在 Windows 环境中构建 exe 并创建 Release：
 
 ```powershell
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 如果项目仓库尚未开启 Actions 或 Release 权限，请先检查 `.github/workflows/windows-release.yml` 的权限配置。

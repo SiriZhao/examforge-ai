@@ -231,8 +231,10 @@ class GeneratedExamQuestion(BaseModel):
     explanation: str = ""
     difficulty: str = "中等"
     type: str = ""
+    options: list[str] = Field(default_factory=list)
     related_topic: str = ""
     source_hint: str = ""
+    source_basis: str = ""
 
 
 class GeneratedMockExam(BaseModel):

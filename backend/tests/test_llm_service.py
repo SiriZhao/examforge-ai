@@ -7,6 +7,7 @@ from app.services.llm_providers.openai_compatible import normalize_base_url
 from app.services.llm_service_prompt import (
     MAX_CHUNK_CHARS,
     MAX_LLM_INPUT_CHARS,
+    build_review_prompt,
     prepare_llm_context,
     split_material_chunks,
 )
@@ -169,6 +170,16 @@ def test_deepseek_default_model_is_v4_flash() -> None:
     assert result.llm_status == "disabled"
     assert normalize_base_url("https://api.deepseek.com") == "https://api.deepseek.com/v1"
     assert config.model is None
+
+
+def test_prompt_prioritizes_quality_and_does_not_force_fixed_types() -> None:
+    report = generate_review_report(MATERIALS)
+    prompt = build_review_prompt({"course_name": "demo", "files": [], "global_signals": {}, "chunks": []}, report, [])
+
+    assert "不要把题型强行归入固定题型库" in prompt
+    assert "质量优先于节省 token" in prompt
+    assert "优先参考真实题干结构和题型线索" in prompt
+    assert "不要固定套用" in prompt
 
 
 def test_llm_success_with_deepseek_v4_flash(monkeypatch) -> None:

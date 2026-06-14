@@ -142,17 +142,23 @@ def append_mock_exam(lines: list[str], report: ReviewReport) -> None:
     for index, question in enumerate(report.mock_exam.questions, start=1):
         lines.extend(
             [
-                f"### {index}. {question.question_type}",
+                f"### {index}. {question.type or question.question_type}（{question.difficulty}）",
                 "",
                 question.question,
                 "",
-                f"**参考答案：** {question.answer}",
+                f"**参考答案：** {strip_answer_prefix(question.answer)}",
             ]
         )
+        if question.options:
+            for option in question.options:
+                lines.append(f"- {option}")
         if question.explanation:
             lines.append(f"**解析：** {question.explanation}")
-        if question.chapter or question.concept:
-            lines.append(f"_专题：{question.chapter}；考点：{question.concept}_")
+        topic = question.related_topic or question.concept or question.chapter
+        if topic:
+            lines.append(f"_相关考点：{topic}_")
+        if question.source_basis or question.source_hint:
+            lines.append(f"_来源依据：{question.source_basis or question.source_hint}_")
         lines.append("")
 
 
@@ -201,3 +207,11 @@ def append_quality(lines: list[str], report: ReviewReport) -> None:
 
 def escape_table_cell(value: str) -> str:
     return str(value).replace("|", "\\|").replace("\n", "<br>")
+
+
+def strip_answer_prefix(value: str) -> str:
+    text = str(value or "").strip()
+    for prefix in ["参考答案：", "参考答案:", "**参考答案：**", "**参考答案:**"]:
+        if text.startswith(prefix):
+            return text[len(prefix):].strip()
+    return text

@@ -116,6 +116,7 @@ export type GeneratedExamQuestion = {
   question_type: string;
   type?: string;
   question: string;
+  options?: string[];
   answer: string;
   chapter: string;
   concept: string;
@@ -123,6 +124,7 @@ export type GeneratedExamQuestion = {
   difficulty?: string;
   related_topic?: string;
   source_hint?: string;
+  source_basis?: string;
 };
 
 export type AnkiCard = {

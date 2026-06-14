@@ -14,7 +14,7 @@ $pythonExe = Join-Path $backendVenv "Scripts\python.exe"
 $distDir = Join-Path $root "dist"
 $buildDir = Join-Path $root "build"
 $installerOut = Join-Path $distDir "installer"
-$appVersion = "0.3.1"
+$appVersion = "0.3.2"
 
 function Step {
     param([string]$Message)

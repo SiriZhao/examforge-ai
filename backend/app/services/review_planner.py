@@ -8,6 +8,7 @@ from app.services.frequency_analyzer import count_question_types, high_frequency
 from app.services.question_extractor import extract_questions
 from app.services.text_cleaner import clean_list, clean_report_text, clean_text
 from app.services.text_quality import clean_formula_text, clean_topic_list
+from app.services.mock_exam_quality import ensure_mock_exam_quality
 
 INSUFFICIENT_MESSAGE = "当前材料不足，无法可靠判断。"
 
@@ -322,6 +323,7 @@ def sanitize_report(report: ReviewReport) -> ReviewReport:
     report.review_order = report.review_order[:12]
     report.sprint_plans = report.sprint_plans[:3]
     report.anki_cards = dedupe_anki_cards(report.anki_cards)[:60]
+    report, _ = ensure_mock_exam_quality(report)
     return report
 
 
@@ -330,14 +332,30 @@ def dedupe_anki_cards(cards: list[AnkiCard]) -> list[AnkiCard]:
     result: list[AnkiCard] = []
     for card in cards:
         front = clean_text(card.front)
-        if not front or front in seen:
+        if not front or front in seen or is_generic_anki_front(front):
             continue
         card.front = front[:120]
         card.back = clean_text(card.back)
+        if len(card.back) < 18 or is_generic_anki_back(card.back):
+            continue
         card.tags = card.tags if isinstance(card.tags, str) else " ".join(card.tags)
+        card.tags = " ".join(clean_topic_list(str(card.tags).split(), limit=6)) or "ExamForge"
         seen.add(front)
         result.append(card)
     return result
+
+
+def is_generic_anki_front(front: str) -> bool:
+    return (
+        ("关于 " in front and "需要掌握什么" in front)
+        or front.startswith("解释：")
+        or "所属章节" in front
+        or len(clean_topic_list([front], limit=1)) == 0
+    )
+
+
+def is_generic_anki_back(back: str) -> bool:
+    return "所属章节：" in back and "常见题型：" in back and len(back) < 80
 
 
 def safe_display_title(raw_title: str, keywords: list[str], index: int) -> str:

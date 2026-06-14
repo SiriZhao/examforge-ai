@@ -534,6 +534,12 @@ function ConfigGrid({
 
       <fieldset ref={llmRef}>
         <legend>大模型增强</legend>
+        <div className="ai-recommendation">
+          <strong>推荐开启 AI 深度整理</strong>
+          <p>
+            本地整理模式可以快速生成安全底稿；接入 DeepSeek / OpenAI-compatible 模型后，系统可以基于 OCR 结果、课件、笔记和往年题进行章节重组、题型归纳、模拟卷生成和 Anki 优化，生成质量通常明显高于本地规则模式。
+          </p>
+        </div>
         <p className="helper-text">本地整理模式无需 API Key，适合快速生成本地安全底稿；开启大模型增强后，可以提升章节/专题重组、题型归纳、模拟卷、Anki 卡片和冲刺计划的质量。</p>
         <label className="checkbox-row">
           <input checked={Boolean(llmConfig.enabled)} type="checkbox" onChange={(event) => setLlmConfig({ ...llmConfig, enabled: event.target.checked })} />

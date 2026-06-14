@@ -16,12 +16,12 @@ VSVersionInfo(
         [
           StringStruct('CompanyName', 'SiriZhao'),
           StringStruct('FileDescription', '期末复习资料生成器'),
-          StringStruct('FileVersion', '0.3.1'),
+          StringStruct('FileVersion', '0.3.2'),
           StringStruct('InternalName', 'ExamForgeAI'),
           StringStruct('LegalCopyright', '© 2026 SiriZhao'),
           StringStruct('OriginalFilename', 'ExamForgeAI.exe'),
           StringStruct('ProductName', 'ExamForge AI'),
-          StringStruct('ProductVersion', '0.3.1'),
+          StringStruct('ProductVersion', '0.3.2'),
           StringStruct('Comments', '面向大学生期末复习场景的本地 AI 复习资料生成工具'),
         ],
       )
