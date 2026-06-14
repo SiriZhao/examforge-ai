@@ -11,6 +11,7 @@ from docx.shared import Pt
 
 from app.schemas.review import ExportFormat, ReviewReport
 from app.services.review_planner import sanitize_report
+from app.services.text_quality import safe_download_filename
 
 
 class ExportError(RuntimeError):
@@ -130,13 +131,24 @@ def export_pdf(markdown: str, output_dir: Path, basename: str) -> Path:
 
 def export_anki_csv(report: ReviewReport, output_dir: Path, basename: str) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"{basename}-anki.csv"
+    if basename.endswith(".csv"):
+        path = output_dir / basename
+    else:
+        path = output_dir / f"{basename}.csv"
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(["Front", "Back", "Tags", "CardType", "Priority", "SourceHint"])
         for card in report.anki_cards:
             writer.writerow([card.front, card.back, card.tags, card.card_type, card.priority, card.source_hint])
     return path
+
+
+def report_download_filename(course_name: str | None, export_format: ExportFormat) -> str:
+    return safe_download_filename(course_name, "复习资料包", export_format)
+
+
+def anki_download_filename(course_name: str | None) -> str:
+    return safe_download_filename(course_name, "Anki卡片", "csv")
 
 
 def add_exam_intelligence_docx_sections(document: Document, report: ReviewReport) -> None:
@@ -193,10 +205,10 @@ def markdown_to_html(markdown: str) -> str:
       margin: 32px;
     }}
     h1, h2, h3 {{ color: #0f172a; }}
-    table {{ border-collapse: collapse; width: 100%; margin: 12px 0 20px; }}
-    th, td {{ border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 12px 0 20px; table-layout: fixed; }}
+    th, td {{ border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }}
     th {{ background: #f1f5f9; }}
-    code, pre {{ font-family: Consolas, "Microsoft YaHei", monospace; }}
+    code, pre {{ font-family: Consolas, "Microsoft YaHei", monospace; white-space: pre-wrap; overflow-wrap: anywhere; }}
   </style>
 </head>
 <body>{body}</body>

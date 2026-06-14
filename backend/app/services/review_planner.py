@@ -7,6 +7,7 @@ from app.services.exam_intelligence import build_exam_intelligence
 from app.services.frequency_analyzer import count_question_types, high_frequency_points, match_questions_to_chapters
 from app.services.question_extractor import extract_questions
 from app.services.text_cleaner import clean_list, clean_report_text, clean_text
+from app.services.text_quality import clean_formula_text, clean_topic_list
 
 INSUFFICIENT_MESSAGE = "当前材料不足，无法可靠判断。"
 
@@ -300,7 +301,10 @@ def detect_insufficient_materials(
 def sanitize_report(report: ReviewReport) -> ReviewReport:
     report.title = clean_text(report.title)
     report.summary = clean_text(report.summary)
-    report.high_frequency_points = clean_list(report.high_frequency_points, fallback=INSUFFICIENT_MESSAGE, limit=12)
+    if report.high_frequency_points == [INSUFFICIENT_MESSAGE]:
+        report.high_frequency_points = [INSUFFICIENT_MESSAGE]
+    else:
+        report.high_frequency_points = clean_topic_list(report.high_frequency_points, limit=12) or [INSUFFICIENT_MESSAGE]
     report.sprint_checklist = clean_list(report.sprint_checklist, fallback=INSUFFICIENT_MESSAGE, limit=14)
     report.low_priority = clean_list(report.low_priority, fallback="暂未识别出明确的低优先级专题。")
     report.insufficient_materials = clean_list(report.insufficient_materials)
@@ -308,8 +312,8 @@ def sanitize_report(report: ReviewReport) -> ReviewReport:
         chapter.chapter = safe_display_title(chapter.chapter, chapter.keywords, index)
         chapter.importance = max(0, min(100, chapter.importance))
         chapter.weighted_score = max(0, min(100, chapter.weighted_score or chapter.importance))
-        chapter.keywords = clean_list(chapter.keywords, fallback=INSUFFICIENT_MESSAGE, limit=12)
-        chapter.formulas = clean_list(chapter.formulas, limit=8)
+        chapter.keywords = clean_topic_list(chapter.keywords, limit=12) or [INSUFFICIENT_MESSAGE]
+        chapter.formulas = clean_list([clean_formula_text(item) for item in chapter.formulas], limit=8)
         chapter.examples = clean_list(chapter.examples, fallback=INSUFFICIENT_MESSAGE, limit=5)
         chapter.review_advice = clean_text(chapter.review_advice)
     for index, item in enumerate(report.review_order, start=1):

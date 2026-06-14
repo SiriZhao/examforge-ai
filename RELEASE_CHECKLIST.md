@@ -1,4 +1,4 @@
-﻿# ExamForge AI Release Checklist
+# ExamForge AI Release Checklist
 
 Use this checklist before making the repository public, pushing a release tag, or publishing a Windows installer.
 
@@ -70,7 +70,7 @@ cd ..
 
 - [ ] `dist/ExamForgeAI.exe` exists.
 - [ ] `dist/ExamForgeAI.exe` can start without Python or Node.js installed on the target machine.
-- [ ] `dist/installer/ExamForgeAISetup-0.3.0.exe` exists.
+- [ ] `dist/installer/ExamForgeAISetup-0.3.1.exe` exists.
 - [ ] Installer can install ExamForge AI into the current user's app directory.
 - [ ] Installed app starts and opens the browser.
 - [ ] Uninstall works normally.
@@ -89,17 +89,17 @@ Expected outputs:
 
 ```text
 dist/ExamForgeAI.exe
-dist/installer/ExamForgeAISetup-0.3.0.exe
+dist/installer/ExamForgeAISetup-0.3.1.exe
 ```
 
 ## 5. GitHub Release Check
 
-- [ ] Release tag is correct, for example `v0.3.0`.
+- [ ] Release tag is correct, for example `v0.3.1`.
 - [ ] Tag version matches `installer/exam-review-agent.iss`, `installer/version_info.txt`, README, and release notes.
 - [ ] Release notes are written and include major changes, known issues, and Windows install instructions.
 - [ ] GitHub Actions Windows release workflow completed successfully.
 - [ ] `ExamForgeAI.exe` artifact is uploaded.
-- [ ] `ExamForgeAISetup-0.3.0.exe` artifact is uploaded.
+- [ ] `ExamForgeAISetup-0.3.1.exe` artifact is uploaded.
 - [ ] Release assets are attached to the GitHub Release.
 - [ ] Download links work from a clean browser session.
 - [ ] The release is marked as draft until the installer has been smoke-tested.
@@ -107,8 +107,8 @@ dist/installer/ExamForgeAISetup-0.3.0.exe
 Suggested commands:
 
 ```powershell
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 After the workflow completes, download the installer from GitHub Releases and run a final clean-machine smoke test.

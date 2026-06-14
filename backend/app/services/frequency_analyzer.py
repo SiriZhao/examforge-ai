@@ -3,7 +3,8 @@ from collections import Counter, defaultdict
 from app.schemas.review import ExamQuestion, QuestionType
 from app.services.chapter_extractor import ChapterSection, DEFAULT_CHAPTER
 from app.services.concept_extractor import extract_keywords
-from app.services.text_cleaner import clean_list, clean_text, is_noise_term
+from app.services.text_cleaner import clean_text, is_noise_term
+from app.services.text_quality import clean_topic_list, clean_topic_name
 
 
 def match_questions_to_chapters(
@@ -47,12 +48,13 @@ def high_frequency_points(
 ) -> list[str]:
     point_scores: dict[str, int] = defaultdict(int)
     for chapter, questions in chapter_questions.items():
-        chapter_name = clean_text(chapter)
+        chapter_name = clean_topic_name(clean_text(chapter)) or DEFAULT_CHAPTER
         for question in questions:
             for keyword in question.keywords:
-                if is_noise_term(keyword):
+                keyword_name = clean_topic_name(keyword)
+                if not keyword_name or is_noise_term(keyword_name):
                     continue
-                point_scores[f"{chapter_name}：{clean_text(keyword)}"] += 1
+                point_scores[f"{chapter_name}: {keyword_name}"] += 1
 
     ranked = sorted(point_scores.items(), key=lambda item: item[1], reverse=True)
-    return clean_list([point for point, _ in ranked], limit=limit)
+    return clean_topic_list([point for point, _ in ranked], limit=limit)

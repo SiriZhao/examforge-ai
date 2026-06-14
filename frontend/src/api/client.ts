@@ -365,6 +365,11 @@ export function downloadUrl(downloadPath: string): string {
   return filename ? `${API_BASE_URL}/download/${encodeURIComponent(filename)}` : "#";
 }
 
+export function downloadFilename(downloadPath: string): string | undefined {
+  const filename = downloadPath.split(/[\\/]/).pop();
+  return filename ? decodeURIComponent(filename) : undefined;
+}
+
 async function request<T>(path: string, options: RequestInit): Promise<T> {
   try {
     const response = await api.request<T>({

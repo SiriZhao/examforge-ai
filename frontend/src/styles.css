@@ -655,12 +655,17 @@ li {
 
 .table-wrap {
   overflow-x: auto;
+  width: 100%;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
 }
 
 table {
   width: 100%;
+  min-width: 680px;
   border-collapse: collapse;
   font-size: 0.9rem;
+  table-layout: fixed;
 }
 
 th,
@@ -669,6 +674,10 @@ td {
   padding: 9px 8px;
   text-align: left;
   vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
 }
 
 th {
@@ -676,6 +685,21 @@ th {
   font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  background: #f8fafc;
+}
+
+th:nth-child(2),
+th:nth-child(3),
+th:nth-child(4),
+td:nth-child(2),
+td:nth-child(3),
+td:nth-child(4) {
+  text-align: center;
+}
+
+td:first-child,
+th:first-child {
+  width: 34%;
 }
 
 .score-pill {
@@ -695,6 +719,8 @@ th {
   border-radius: 8px;
   padding: 16px;
   background: #fbfcfd;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .markdown-view h1 {
@@ -703,6 +729,32 @@ th {
 
 .markdown-view h2 {
   margin-top: 18px;
+}
+
+.markdown-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-view table {
+  width: 100%;
+  min-width: 720px;
+}
+
+.markdown-view code,
+.markdown-view pre {
+  font-family: Consolas, "Microsoft YaHei", monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.mini-section,
+.quick-list,
+.mock-exam,
+.metric-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .chat-panel {
@@ -889,5 +941,32 @@ th {
   .about-list div {
     grid-template-columns: 1fr;
     gap: 3px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .table-wrap,
+  .markdown-view,
+  .mini-section,
+  .quick-list,
+  .mock-exam,
+  .metric-card {
+    border-color: #334155;
+    background: #111827;
+  }
+
+  th {
+    background: #1f2937;
+    color: #cbd5e1;
+  }
+
+  td {
+    color: #e5e7eb;
+    border-bottom-color: #334155;
+  }
+
+  .score-pill {
+    background: #123c35;
+    color: #b7f7df;
   }
 }

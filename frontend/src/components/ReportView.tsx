@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { downloadUrl, type ExportFormat, type GenerateReviewResponse, type OptimizationGoal } from "../api/client";
+import { downloadFilename, downloadUrl, type ExportFormat, type GenerateReviewResponse, type OptimizationGoal } from "../api/client";
 import { MarkdownView } from "./MarkdownView";
 
 type ReportViewProps = {
@@ -71,7 +71,14 @@ export function ReportView({
         <div className="download-actions">
           {(["md", "docx", "pdf"] as ExportFormat[]).map((format) =>
             result.download_links[format] ? (
-              <a key={format} className="secondary" href={downloadUrl(result.download_links[format] || "")} target="_blank" rel="noreferrer">
+              <a
+                key={format}
+                className="secondary"
+                href={downloadUrl(result.download_links[format] || "")}
+                download={downloadFilename(result.download_links[format] || "")}
+                target="_blank"
+                rel="noreferrer"
+              >
                 下载 {format.toUpperCase()}
               </a>
             ) : (
@@ -81,7 +88,13 @@ export function ReportView({
             ),
           )}
           {result.anki_csv_download_path && (
-            <a className="secondary accent" href={downloadUrl(result.anki_csv_download_path)} target="_blank" rel="noreferrer">
+            <a
+              className="secondary accent"
+              href={downloadUrl(result.anki_csv_download_path)}
+              download={downloadFilename(result.anki_csv_download_path)}
+              target="_blank"
+              rel="noreferrer"
+            >
               下载 Anki CSV
             </a>
           )}
@@ -453,7 +466,13 @@ function AnkiTab({ result }: { result: GenerateReviewResponse }) {
       <div className="section-header compact">
         <h3>Anki 卡片</h3>
         {result.anki_csv_download_path && (
-          <a className="secondary accent" href={downloadUrl(result.anki_csv_download_path)} target="_blank" rel="noreferrer">
+          <a
+            className="secondary accent"
+            href={downloadUrl(result.anki_csv_download_path)}
+            download={downloadFilename(result.anki_csv_download_path)}
+            target="_blank"
+            rel="noreferrer"
+          >
             下载 Anki CSV
           </a>
         )}

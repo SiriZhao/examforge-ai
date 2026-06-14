@@ -2,6 +2,7 @@ import re
 from collections import Counter
 
 from app.services.text_cleaner import clean_list, is_noise_term
+from app.services.text_quality import clean_formula_text, clean_topic_name
 
 STOPWORDS = {
     "考点",
@@ -44,7 +45,7 @@ def extract_keywords(text: str, limit: int = 12) -> list[str]:
     candidates = []
     for token in tokens:
         value = token.strip()
-        if value in STOPWORDS or value.lower() in STOPWORDS or is_noise_term(value):
+        if value in STOPWORDS or value.lower() in STOPWORDS or is_noise_term(value) or not clean_topic_name(value):
             continue
         candidates.append(value)
     counts = Counter(candidates)
@@ -55,7 +56,7 @@ def extract_formulas(text: str, limit: int = 8) -> list[str]:
     formulas: list[str] = []
     seen: set[str] = set()
     for match in FORMULA_PATTERN.findall(text):
-        formula = match.strip()
+        formula = clean_formula_text(match.strip())
         if formula and formula not in seen:
             formulas.append(formula)
             seen.add(formula)

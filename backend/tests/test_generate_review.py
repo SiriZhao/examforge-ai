@@ -51,6 +51,7 @@ def test_generate_review_exports_markdown_and_anki(
             "files": [uploaded.name],
             "export_format": "md",
             "title": "Plant Biology Final Sprint",
+            "course_name": "植物学下",
             "llm_config": {
                 "enabled": True,
                 "provider": "openai",
@@ -61,7 +62,7 @@ def test_generate_review_exports_markdown_and_anki(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["review_report"]["title"] == "Plant Biology Final Sprint"
+    assert body["review_report"]["title"] == "植物学下"
     assert "章节优先级" in body["markdown"]
     assert "往年题高频考点分析" in body["markdown"]
     assert "推荐复习顺序" in body["markdown"]
@@ -70,7 +71,8 @@ def test_generate_review_exports_markdown_and_anki(
     assert body["download_path"].endswith(".md")
     assert body["download_links"]["md"].endswith(".md")
     assert body["anki_csv_download_path"].startswith("/download/")
-    assert body["anki_csv_download_path"].endswith("-anki.csv")
+    assert body["download_links"]["md"].endswith("植物学下_复习资料包.md")
+    assert body["anki_csv_download_path"].endswith("植物学下_Anki卡片.csv")
     assert body["review_report"]["past_exam_analysis"]["detected_files"]
     assert body["review_report"]["mock_exam"]["questions"]
     assert body["review_report"]["anki_cards"]
@@ -78,7 +80,7 @@ def test_generate_review_exports_markdown_and_anki(
     assert body["generation_summary"]["files_processed"] == 1
     assert body["generation_summary"]["pages_text_extracted"] == 1
     assert any(settings.output_dir.glob("*.md"))
-    assert any(settings.output_dir.glob("*-anki.csv"))
+    assert any(settings.output_dir.glob("*_Anki卡片.csv"))
     assert "secret-key-should-not-leak" not in response.text
 
 

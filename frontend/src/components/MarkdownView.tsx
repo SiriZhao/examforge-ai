@@ -31,24 +31,26 @@ function renderMarkdown(markdown: string) {
     if (tableRows.length > 0) {
       const [head, ...body] = tableRows;
       nodes.push(
-        <table key={`table-${nodes.length}`}>
-          <thead>
-            <tr>
-              {head.map((cell, index) => (
-                <th key={index}>{cell}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {body.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {row.map((cell, cellIndex) => (
-                  <td key={cellIndex}>{cell}</td>
+        <div className="markdown-table-wrap" key={`table-${nodes.length}`}>
+          <table>
+            <thead>
+              <tr>
+                {head.map((cell, index) => (
+                  <th key={index}>{cell}</th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>,
+            </thead>
+            <tbody>
+              {body.map((row, rowIndex) => (
+                <tr key={rowIndex}>
+                  {row.map((cell, cellIndex) => (
+                    <td key={cellIndex}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>,
       );
       tableRows = [];
     }

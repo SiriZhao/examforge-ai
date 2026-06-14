@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 
 from app.schemas.review import ReviewReport
 from app.services.llm_service_prompt import MAX_CHUNK_CHARS, MAX_CHUNKS, clean_lines, split_material_chunks
+from app.services.text_quality import clean_formula_text, clean_topic_list, clean_topic_name, looks_like_formula_fragment
 
 
 @dataclass
@@ -51,9 +52,9 @@ def build_evidence_pack(
 ) -> EvidencePack:
     files_source = file_texts or [("合并材料", materials_text)]
     evidence_files = [build_evidence_file(filename, text) for filename, text in files_source]
-    all_titles = dedupe([title for item in evidence_files for title in item.possible_titles], 30)
+    all_titles = clean_topic_list([title for item in evidence_files for title in item.possible_titles], 30)
     all_questions = dedupe([question for item in evidence_files for question in item.possible_questions], 60)
-    all_keywords = dedupe([keyword for item in evidence_files for keyword in item.possible_keywords], 60)
+    all_keywords = clean_topic_list([keyword for item in evidence_files for keyword in item.possible_keywords], 60)
     frequent_terms = extract_frequent_terms(materials_text, 40)
     detected_exam_materials = [
         item.filename
@@ -69,7 +70,7 @@ def build_evidence_pack(
             "frequent_terms": frequent_terms,
             "repeated_phrases": extract_repeated_phrases(materials_text),
             "possible_titles": all_titles,
-            "possible_exam_topics": dedupe(safe_draft.high_frequency_points + all_keywords[:20], 40),
+            "possible_exam_topics": clean_topic_list(safe_draft.high_frequency_points + all_keywords[:20], 40),
             "possible_question_clusters": cluster_question_candidates(all_questions),
             "detected_exam_materials": detected_exam_materials,
             "safe_draft_review_order": [
@@ -166,7 +167,7 @@ def extract_possible_titles(lines: list[str], filename: str) -> list[str]:
             or (line.count(" ") <= 5 and not line.endswith(("。", ".", "；", ";")))
         ):
             candidates.append(line)
-    return dedupe(candidates, 24)
+    return clean_topic_list(candidates, 24)
 
 
 def extract_question_candidates(text: str, limit: int) -> list[str]:
@@ -196,7 +197,9 @@ def extract_formulas(text: str, limit: int) -> list[str]:
     for line in text.splitlines():
         stripped = line.strip()
         if 4 <= len(stripped) <= 120 and re.search(r"[=∑∫√≈≤≥±∞]|\\frac|\\sum|P\(|E\(|Var\(", stripped):
-            formulas.append(stripped)
+            cleaned = clean_formula_text(stripped)
+            if cleaned:
+                formulas.append(cleaned)
     return dedupe(formulas, limit)
 
 
@@ -212,8 +215,12 @@ def extract_definitions(lines: list[str], limit: int) -> list[str]:
 def extract_frequent_terms(text: str, limit: int) -> list[str]:
     tokens = re.findall(r"[\u4e00-\u9fff]{2,8}|[A-Za-z][A-Za-z0-9_-]{2,}", text)
     stop = {"the", "and", "for", "with", "that", "this", "chapter", "lecture", "page", "考试", "复习", "材料"}
-    counts = Counter(token for token in tokens if token.lower() not in stop)
-    return [term for term, _ in counts.most_common(limit)]
+    counts = Counter(
+        token
+        for token in tokens
+        if token.lower() not in stop and clean_topic_name(token) and not looks_like_formula_fragment(token)
+    )
+    return clean_topic_list([term for term, _ in counts.most_common(limit * 2)], limit)
 
 
 def extract_repeated_phrases(text: str) -> list[str]:

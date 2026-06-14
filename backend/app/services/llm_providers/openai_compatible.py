@@ -22,6 +22,7 @@ from app.services.llm_service_prompt import (
     prepare_llm_context,
     split_material_chunks,
 )
+from app.services.text_quality import clean_formula_text, clean_topic_list, clean_topic_name
 
 logger = logging.getLogger(__name__)
 
@@ -653,6 +654,7 @@ def normalize_review_payload(data: dict) -> None:
     normalize_mock_exam(data)
     normalize_anki_cards(data)
     normalize_v030_fields(data)
+    sanitize_display_fields(data)
 
 
 def normalize_study_units(data: dict) -> None:
@@ -814,6 +816,62 @@ def normalize_v030_fields(data: dict) -> None:
         item.setdefault("source_hint", "")
         cards.append(item)
     data["anki_cards"] = cards
+
+
+def sanitize_display_fields(data: dict) -> None:
+    for index, unit in enumerate(data.get("study_units", []) or [], start=1):
+        if not isinstance(unit, dict):
+            continue
+        unit["name"] = clean_topic_name(str(unit.get("name") or "")) or f"核心专题 {index}"
+        unit["must_know"] = clean_topic_list([str(item) for item in listify(unit.get("must_know"))], 12)
+        unit["key_points"] = clean_topic_list([str(item) for item in listify(unit.get("key_points"))], 12)
+        unit["common_exam_angles"] = clean_topic_list([str(item) for item in listify(unit.get("common_exam_angles"))], 12)
+        unit["pitfalls"] = clean_topic_list([str(item) for item in listify(unit.get("pitfalls"))], 12)
+        unit["formulas_or_methods"] = [
+            clean_formula_text(str(item))
+            for item in listify(unit.get("formulas_or_methods"))
+            if clean_formula_text(str(item))
+        ]
+
+    for index, chapter in enumerate(data.get("chapters", []) or [], start=1):
+        if not isinstance(chapter, dict):
+            continue
+        chapter["chapter"] = clean_topic_name(str(chapter.get("chapter") or "")) or f"核心专题 {index}"
+        chapter["keywords"] = clean_topic_list([str(item) for item in listify(chapter.get("keywords"))], 12)
+        chapter["question_types"] = clean_topic_list([str(item) for item in listify(chapter.get("question_types"))], 8)
+        chapter["formulas"] = [
+            clean_formula_text(str(item))
+            for item in listify(chapter.get("formulas"))
+            if clean_formula_text(str(item))
+        ]
+
+    for index, item in enumerate(data.get("review_order", []) or [], start=1):
+        if isinstance(item, dict):
+            item["chapter"] = clean_topic_name(str(item.get("chapter") or "")) or f"核心专题 {index}"
+
+    data["high_frequency_points"] = clean_topic_list([str(item) for item in data.get("high_frequency_points", []) or []], 20)
+
+    past_exam = data.get("past_exam_analysis")
+    if isinstance(past_exam, dict):
+        cleaned_topics = []
+        for topic in past_exam.get("high_frequency_topics", []) or []:
+            if not isinstance(topic, dict):
+                continue
+            topic_name = clean_topic_name(str(topic.get("topic") or ""))
+            if not topic_name:
+                continue
+            topic["topic"] = topic_name
+            topic["chapter"] = clean_topic_name(str(topic.get("chapter") or "")) or "核心专题"
+            topic["question_types"] = clean_topic_list([str(item) for item in listify(topic.get("question_types"))], 6)
+            topic["keywords"] = clean_topic_list([str(item) for item in listify(topic.get("keywords"))], 8)
+            cleaned_topics.append(topic)
+        past_exam["high_frequency_topics"] = cleaned_topics
+
+    for item in data.get("question_types", []) or []:
+        if not isinstance(item, dict):
+            continue
+        item["name"] = clean_topic_name(str(item.get("name") or "")) or "综合题型"
+        item["related_topics"] = clean_topic_list([str(part) for part in listify(item.get("related_topics"))], 10)
 
 
 def sprint_plan_dict_to_list(plan: dict) -> list[dict]:

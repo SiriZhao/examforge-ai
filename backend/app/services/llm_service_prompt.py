@@ -1,4 +1,4 @@
-import json
+﻿import json
 import re
 from dataclasses import dataclass
 
@@ -64,7 +64,7 @@ def build_review_prompt(
 考试类型：{exam_type}
 考试策略：{exam_instruction}
 
-v0.3.0 输出要求：
+v0.3.1 输出要求：
 - 报告必须体现复习目标和考试类型差异。
 - question_types 需要包含 name、confidence、evidence、evidence_sources、features、related_topics、answer_strategy、sample_questions、practice_suggestions、is_from_past_exam。
 - mock_exam.questions 每题需要 question_type/type、difficulty、question、answer、explanation、related_topic、source_hint。
@@ -468,3 +468,4 @@ def looks_like_ocr_noise(line: str) -> bool:
         if uppercase_ratio > 0.85 and not re.search(r"ATP|DNA|RNA|PDF|OCR", line):
             return True
     return False
+

@@ -1,9 +1,9 @@
-﻿from functools import lru_cache
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 
 
 class Settings(BaseSettings):

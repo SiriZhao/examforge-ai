@@ -1,7 +1,5 @@
 import logging
 from collections.abc import Callable
-from uuid import uuid4
-
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
@@ -12,7 +10,13 @@ from app.schemas.review import (
     ReoptimizeReviewRequest,
     ReoptimizeReviewResponse,
 )
-from app.services.export_service import ExportError, export_anki_csv, export_review_report
+from app.services.export_service import (
+    ExportError,
+    anki_download_filename,
+    export_anki_csv,
+    export_review_report,
+    report_download_filename,
+)
 from app.services.file_parser import ParseError, parse_file
 from app.services.generator import generate_markdown_review
 from app.services.llm_service import generate_review_summary
@@ -183,7 +187,6 @@ def build_generate_review_response(
     if progress_callback:
         progress_callback(86, "正在生成 Markdown / Word / PDF 下载文件。")
     markdown = generate_markdown_review(report)
-    output_basename = f"review-{uuid4().hex}"
     export_formats = request.export_formats or [request.export_format]
     if "md" not in export_formats:
         export_formats = ["md", *export_formats]
@@ -191,7 +194,7 @@ def build_generate_review_response(
     download_links = {}
     anki_csv_download_path = None
     try:
-        anki_path = export_anki_csv(report, settings.output_dir, output_basename)
+        anki_path = export_anki_csv(report, settings.output_dir, anki_download_filename(report_title))
         anki_csv_download_path = f"/download/{anki_path.name}"
         for export_index, export_format in enumerate(export_formats, start=1):
             if progress_callback:
@@ -202,7 +205,7 @@ def build_generate_review_response(
                 report=report,
                 markdown=markdown,
                 output_dir=settings.output_dir,
-                basename=output_basename,
+                basename=report_download_filename(report_title, export_format).rsplit(".", 1)[0],
                 export_format=export_format,
             )
             download_links[export_format] = f"/download/{output_path.name}"

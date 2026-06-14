@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from app.config import settings
+from app.services.text_quality import content_disposition_header
 
 router = APIRouter()
 
@@ -24,4 +25,8 @@ def download_file(filename: str) -> FileResponse:
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="下载文件不存在。")
 
-    return FileResponse(path=file_path, filename=safe_name)
+    return FileResponse(
+        path=file_path,
+        filename=safe_name,
+        headers={"Content-Disposition": content_disposition_header(safe_name)},
+    )
