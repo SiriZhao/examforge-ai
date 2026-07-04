@@ -1,15 +1,42 @@
 # OCR Providers
 
-Supported providers:
+ExamForge AI extracts embedded text first and only uses OCR when a page or image needs it. This avoids wasting time on text PDFs and improves cloud performance.
 
-- `local_tesseract`: uses local Tesseract.
-- `custom_api`: sends image data to a caller-provided endpoint.
-- `openai_vision`: placeholder for OpenAI vision-compatible OCR.
+## Current Strategy
 
-For scanned PDFs, each page is text-extracted first. If a page has fewer than 20 characters, it is rendered to an image and OCR is used as fallback.
+- PDF pages with enough text are parsed directly.
+- Scanned or low-text pages are sent through OCR.
+- Images are OCR candidates.
+- DOCX, PPTX, Markdown, and TXT are parsed without OCR.
+- OCR results can be cached by file hash.
 
-Local OCR requires Tesseract and, for PDF rendering, Poppler.
+## Local Providers
 
-## Add a Provider
+Preferred local OCR path:
 
-Add a new provider under `backend/app/services/ocr_providers/`, subclass `BaseOCRProvider`, then register it in `registry.py`. Provider implementations must only receive API keys through request config or environment variables and must never log them.
+- RapidOCR when available.
+
+Fallback path:
+
+- Tesseract when enabled and installed.
+
+Windows subprocess calls should hide console windows to avoid flashing terminals during OCR.
+
+## Cloud Deployments
+
+Cloud deployments should install OCR dependencies inside the Docker image and should not depend on the user's machine. Configure provider behavior with:
+
+- `ENABLE_LOCAL_OCR`
+- `ENABLE_RAPIDOCR`
+- `ENABLE_TESSERACT`
+- `OCR_CACHE_DIR`
+
+## Provider Guidelines
+
+When adding an OCR provider:
+
+1. Add it under `backend/app/services/ocr_providers/`.
+2. Register it in the provider registry.
+3. Never log user API keys or full document contents.
+4. Continue processing when only some pages fail.
+5. Add tests for cache use, text-layer skipping, and failure fallback.

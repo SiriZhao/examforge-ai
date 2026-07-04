@@ -61,7 +61,7 @@ jobs:
 
       - name: Build Windows executable with PyInstaller
         shell: pwsh
-        run: .\backend\.venv\Scripts\python.exe -m PyInstaller ExamReviewAgent.spec --noconfirm
+        run: .\backend\.venv\Scripts\python.exe -m PyInstaller ExamForgeAI.spec --noconfirm
 
       - name: Install Inno Setup
         shell: pwsh

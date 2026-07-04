@@ -107,7 +107,7 @@ try {
     }
 
     Step "Build Windows executable with PyInstaller"
-    & $pythonExe -m PyInstaller ExamReviewAgent.spec --noconfirm
+    & $pythonExe -m PyInstaller ExamForgeAI.spec --noconfirm
 
     $exePath = Join-Path $distDir "ExamForgeAI.exe"
     if (-not (Test-Path $exePath)) {

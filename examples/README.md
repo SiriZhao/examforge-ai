@@ -1,13 +1,13 @@
-# 示例文件
+# Examples
 
-本目录用于 GitHub 展示和本地测试，所有内容均为虚构示例。
+This directory contains fictional demo materials for testing ExamForge AI.
 
-这里的课程名称、课件文本、试题、学生场景和生成结果都不是来自真实教材、真实课件、真实试卷、学校课程或商业教学资料。
+Included files:
 
-可以上传这些文件测试 ExamForge AI：
+- `demo_course_material.md`: fictional course notes for "Introduction to Plant Biology".
+- `demo_past_exam.md`: fictional past-exam style questions.
+- `demo_output.md`: fictional generated review output.
 
-- `demo_course_material.md`：虚构课程 “Introduction to Plant Biology” 的示例课件文本。
-- `demo_past_exam.md`：虚构往年题，包含选择题、填空题、简答题和论述题。
-- `demo_output.md`：软件生成复习资料包的示例。
+These examples are safe to publish because they are not copied from real courses, textbooks, teachers, exams, students, or private documents.
 
-这些文件体积小、内容安全，可以提交到 GitHub，也可以用于手动冒烟测试。
+Do not add real course materials, copyrighted lecture slides, real past exams, personal files, generated reports based on private uploads, or API keys to this directory.

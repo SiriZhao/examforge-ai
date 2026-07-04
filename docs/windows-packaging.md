@@ -34,7 +34,7 @@ The script will:
 5. Install backend dependencies and PyInstaller.
 6. Run backend tests.
 7. Run frontend tests.
-8. Run `pyinstaller ExamReviewAgent.spec`.
+8. Run `pyinstaller ExamForgeAI.spec`.
 9. Build the Inno Setup installer if `ISCC.exe` is available.
 
 Expected outputs:

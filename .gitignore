@@ -10,8 +10,10 @@
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 .pytest_cache/
+**/.pytest_cache/
 .venv/
 venv/
 backend/.venv/
@@ -31,11 +33,15 @@ backend/dist/
 *.zip
 *.7z
 *.rar
+*.log
 
 # Runtime data
 backend/uploads/*
 backend/outputs/*
 backend/cache/*
+uploads/
+outputs/
+cache/
 !backend/uploads/.gitkeep
 !backend/outputs/.gitkeep
 !backend/cache/.gitkeep

@@ -13,6 +13,10 @@ frontend/dist/
 dist/
 build/
 *.exe
+*.msi
+*.zip
+*.7z
+*.rar
 *.log
 .env
 .env.*
@@ -20,8 +24,12 @@ build/
 backend/uploads/
 backend/outputs/
 backend/cache/
+uploads/
+outputs/
+cache/
 backend/.venv/
 screenshots/
+screenshots/raw/
 *.pdf
 *.docx
 *.pptx
