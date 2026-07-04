@@ -1,24 +1,23 @@
-from collections.abc import AsyncIterator
+﻿from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routers import analyze, chat, download, export, generate_review, generate_review_jobs, llm, mock_exam, parse, upload
+from app.services.cloud_runtime import cleanup_runtime_files, ensure_runtime_directories, frontend_static_dir
 from app.utils.error_handlers import register_error_handlers
 from app.utils.logging_config import configure_logging
-
-
-def ensure_runtime_directories() -> None:
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
-    settings.output_dir.mkdir(parents=True, exist_ok=True)
-    settings.ocr_cache_dir.mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     ensure_runtime_directories()
+    cleanup_runtime_files()
     yield
 
 
@@ -28,7 +27,7 @@ register_error_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=settings.normalized_cors_origins or ["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,5 +46,35 @@ app.include_router(export.router, prefix="/api/export", tags=["export"])
 
 
 @app.get("/health")
-def health_check() -> dict[str, str]:
-    return {"status": "ok", "version": settings.app_version}
+@app.get("/api/health")
+def health_check() -> dict[str, str | bool]:
+    return {
+        "status": "ok",
+        "version": settings.app_version,
+        "mode": settings.app_mode,
+        "llm_server_configured": settings.llm_server_configured,
+        "public_base_url": settings.public_base_url,
+    }
+
+
+static_dir = frontend_static_dir()
+if (static_dir / "index.html").exists():
+    assets_dir = static_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_frontend(full_path: str, request: Request) -> FileResponse:
+    if full_path.startswith(("api/", "download/", "upload", "generate-review", "generate-review-jobs")):
+        # Let FastAPI's 404 response handle unknown API-like routes instead of serving the SPA.
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=404, detail="Not found")
+    index = static_dir / "index.html"
+    if index.exists():
+        return FileResponse(index)
+    from fastapi import HTTPException
+
+    raise HTTPException(status_code=404, detail="Frontend build not found. Run npm run build first.")
+

@@ -1,4 +1,4 @@
-from app.schemas.review import ExamType, LLMConfig, ReviewReport, StudyGoal
+from app.schemas.review import DetailLevel, ExamType, LLMConfig, OutputStyle, ReviewReport, StudyGoal
 from app.services.llm_providers.base import BaseLLMProvider
 
 
@@ -18,9 +18,13 @@ class MockLLMProvider(BaseLLMProvider):
         file_texts: list[tuple[str, str]] | None = None,
         study_goal: StudyGoal = "balanced",
         exam_type: ExamType = "unknown",
+        detail_level: DetailLevel = "detailed",
+        output_style: OutputStyle = "teaching_assistant",
     ) -> ReviewReport:
         safe_draft.study_goal = study_goal
         safe_draft.exam_type = exam_type
+        safe_draft.detail_level = detail_level
+        safe_draft.output_style = output_style
         return safe_draft
 
     def test_connection(self, config: LLMConfig) -> str:

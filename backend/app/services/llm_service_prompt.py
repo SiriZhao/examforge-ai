@@ -2,11 +2,11 @@
 import re
 from dataclasses import dataclass
 
-from app.schemas.review import ExamType, ReviewReport, StudyGoal
+from app.schemas.review import DetailLevel, ExamType, OutputStyle, ReviewReport, StudyGoal
 
 MAX_LLM_INPUT_CHARS = 42000
-MAX_CHUNK_CHARS = 10000
-MAX_CHUNKS = 10
+MAX_CHUNK_CHARS = 12000
+MAX_CHUNKS = 12
 CONTEXT_TOO_LONG_MESSAGE = "资料过长，大模型深度整理未完成。系统已保留本地安全底稿。建议分批上传课件、教材和往年题后分别生成。"
 
 
@@ -52,36 +52,45 @@ def build_review_prompt(
     *,
     study_goal: StudyGoal = "balanced",
     exam_type: ExamType = "unknown",
+    detail_level: DetailLevel = "detailed",
+    output_style: OutputStyle = "teaching_assistant",
 ) -> str:
     evidence_limit = 18000 if chunk_insights else 24000
     evidence_json = json.dumps(evidence_pack, ensure_ascii=False)[:evidence_limit]
     insights = "\n\n".join(f"[chunk_insight {index + 1}]\n{item}" for index, item in enumerate(chunk_insights))
     goal_instruction = build_study_goal_instruction(study_goal)
     exam_instruction = build_exam_type_instruction(exam_type)
+    detail_instruction = build_detail_level_instruction(detail_level)
+    style_instruction = build_output_style_instruction(output_style)
     return f"""
 用户复习目标：{study_goal}
 目标策略：{goal_instruction}
 考试类型：{exam_type}
 考试策略：{exam_instruction}
+生成详细度：{detail_level}
+详细度策略：{detail_instruction}
+输出风格：{output_style}
+风格策略：{style_instruction}
 
-v0.3.2 输出要求：
+v0.4.0 输出要求：
 - 报告必须体现复习目标和考试类型差异。
 - question_types 需要包含 name、confidence、evidence、evidence_sources、features、related_topics、answer_strategy、sample_questions、practice_suggestions、is_from_past_exam。
 - mock_exam.questions 每题需要 question_type/type、difficulty、question、options、answer、explanation、related_topic、source_hint、source_basis。
 - anki_cards 需要 front、back、tags、card_type、priority、source_hint，Front 不要过长，Back 必须能独立理解。
 - 如果 study_goal 是 anki_focused，请增加高质量 Anki；如果是 practice_heavy，请增加题目和解析；如果 exam_type 是 programming，请包含代码阅读、输出判断、函数补全、Debug 或编程实现；如果 exam_type 是 essay_based，请包含论述框架。
-- 质量优先于节省 token。必须优先保留往年题题干、题型线索、高频考点、公式/定义/代码片段、chunk_insights 和 local_safe_draft。
+- 质量优先于节省 token。必须优先保留往年题题干、题型线索、高频考点上下文、公式/定义/代码片段、OCR 证据、chunk_insights 和 local_safe_draft。
 
-你是资深大学期末复习资料整理专家，不是普通摘要助手。
+你是资深课程助教和期末复习教练，不是普通摘要助手或模板填空器。
 
 任务：
 根据 Evidence Pack、chunk_insights 和本地安全底稿，重新组织一份真正可复习、可导出的期末复习资料包。
+你的目标是把杂乱资料整理成学生能直接背诵、刷题、冲刺和导出的资料包，而不是机械总结文档。
 
 你可以自由完成：
 - 判断课程主题；
 - 合并和重命名章节/专题/知识模块；
 - 根据真实题干和材料自动总结题型；
-- 设计模拟题结构；
+- 根据往年题题型、难度、问法和考点分布设计模拟题结构；
 - 生成 Anki 卡片；
 - 设计 1 天、3 天、7 天冲刺计划；
 - 重排复习优先级。
@@ -89,7 +98,7 @@ v0.3.2 输出要求：
 必须遵守：
 1. 不要固定套用“第 X 章”“主题 1”这类机械标题，除非材料本身清楚使用这些标题。
 2. 不要把题型强行归入固定题型库。题型名称要根据材料和题干自然命名，例如“概念辨析题”“公式套用计算题”“实验设计题”等。
-3. 可以使用基础学科常识补足解释，但必须优先依据用户上传材料，避免捏造材料中不存在的具体事实；如果是根据材料生成的练习题型，请明确其为“根据材料生成的练习题型”。
+3. 可以使用基础学科常识补足解释、答题步骤和易错点，但必须优先依据用户上传材料，避免捏造材料中不存在的具体事实；如果是根据材料生成的练习题型，请明确其为“根据材料生成的练习题型”。
 4. OCR 可能有错字和噪声，请结合上下文修正，不要机械照抄乱码。
 5. 报告必须具体、可复习、可导出，不能只有空泛摘要。
 6. 如果有往年题或练习题，模拟卷必须优先参考真实题干结构和题型线索；如果材料不足，宁可生成较少的保守练习题，也不要用万能模板凑数量。每题必须有答案、解析、相关考点和来源依据。
@@ -302,6 +311,25 @@ def build_exam_type_instruction(exam_type: ExamType) -> str:
         "coursework_report": "强调报告结构、证据组织、论证链条和引用/材料支撑。",
         "unknown": "系统可根据材料自动判断可能考试形态，模拟卷保持多样。",
     }.get(exam_type, "系统可根据材料自动判断可能考试形态，模拟卷保持多样。")
+
+
+def build_detail_level_instruction(detail_level: DetailLevel) -> str:
+    return {
+        "concise": "保持简洁，但不得删除往年题题干、关键公式、题型线索、答案解析和 Anki 必要内容。",
+        "standard": "输出标准长度，覆盖核心专题、题型、模拟题、Anki 和冲刺计划。",
+        "detailed": "默认采用详细讲义式输出，解释考点原因、答题步骤、易错点和复习优先级。",
+        "exhaustive": "尽量全面保留证据和解释，增加例题、变式、易错点、Anki 卡片和多日计划。",
+    }.get(detail_level, "默认采用详细讲义式输出，解释考点原因、答题步骤、易错点和复习优先级。")
+
+
+def build_output_style_instruction(output_style: OutputStyle) -> str:
+    return {
+        "sprint": "像考前冲刺清单一样组织，突出最短路径、必背必练、最后 1/3/7 天安排。",
+        "top_student_notes": "像高分学生笔记一样组织，突出结构化知识框架、对比、口诀和易混点。",
+        "teaching_assistant": "像助教讲义一样组织，解释清楚概念、题型、答题步骤和材料证据。",
+        "practice_training": "像刷题训练册一样组织，增加题型套路、典型题、变式题、答案和解析。",
+        "anki_cards": "像制卡工作流一样组织，增加具体、去重、可直接导出的 Anki 卡片。",
+    }.get(output_style, "像助教讲义一样组织，解释清楚概念、题型、答题步骤和材料证据。")
 
 
 def build_context_from_chunk_summaries(

@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
 from app.config import settings
+from app.services.cloud_runtime import runtime_dir
 from app.services.text_quality import content_disposition_header
 
 router = APIRouter()
@@ -15,8 +16,8 @@ def download_file(filename: str) -> FileResponse:
     if safe_name != filename:
         raise HTTPException(status_code=400, detail="下载文件名无效。")
 
-    output_root = settings.output_dir.resolve()
-    file_path = (settings.output_dir / safe_name).resolve()
+    output_root = runtime_dir(settings.output_dir).resolve()
+    file_path = (output_root / safe_name).resolve()
     try:
         file_path.relative_to(output_root)
     except ValueError as exc:

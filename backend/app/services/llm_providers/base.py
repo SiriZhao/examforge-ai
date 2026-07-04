@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from app.schemas.review import ExamType, LLMConfig, LLMErrorInfo, ReviewReport, StudyGoal
+from app.schemas.review import DetailLevel, ExamType, LLMConfig, LLMErrorInfo, OutputStyle, ReviewReport, StudyGoal
 
 
 @dataclass
@@ -44,6 +44,8 @@ class BaseLLMProvider(ABC):
         file_texts: list[tuple[str, str]] | None = None,
         study_goal: StudyGoal = "balanced",
         exam_type: ExamType = "unknown",
+        detail_level: DetailLevel = "detailed",
+        output_style: OutputStyle = "teaching_assistant",
     ) -> ReviewReport:
         raise NotImplementedError
 

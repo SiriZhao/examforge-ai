@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$SkipTests,
     [switch]$SkipInstaller
 )
@@ -14,7 +14,7 @@ $pythonExe = Join-Path $backendVenv "Scripts\python.exe"
 $distDir = Join-Path $root "dist"
 $buildDir = Join-Path $root "build"
 $installerOut = Join-Path $distDir "installer"
-$appVersion = "0.3.2"
+$appVersion = "0.4.0"
 
 function Step {
     param([string]$Message)
@@ -142,3 +142,4 @@ try {
 } finally {
     Pop-Location
 }
+

@@ -7,6 +7,7 @@ router = APIRouter()
 
 
 @router.post("/generate-mock-exam", response_model=GenerateMockExamResponse)
+@router.post("/api/generate-mock-exam", response_model=GenerateMockExamResponse)
 def generate_mock_exam_endpoint(
     request: GenerateMockExamRequest,
 ) -> GenerateMockExamResponse:

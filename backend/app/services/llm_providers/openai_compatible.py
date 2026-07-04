@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
-from app.schemas.review import ExamType, LLMConfig, LLMErrorInfo, ReviewPlanItem, ReviewReport, StudyGoal, StudyUnit
+from app.schemas.review import DetailLevel, ExamType, LLMConfig, LLMErrorInfo, OutputStyle, ReviewPlanItem, ReviewReport, StudyGoal, StudyUnit
 from app.services.chapter_extractor import clean_unit_title, is_bad_unit_title
 from app.services.evidence_pack import build_evidence_pack
 from app.services.generator import generate_markdown_review
@@ -44,6 +44,8 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         file_texts: list[tuple[str, str]] | None = None,
         study_goal: StudyGoal = "balanced",
         exam_type: ExamType = "unknown",
+        detail_level: DetailLevel = "detailed",
+        output_style: OutputStyle = "teaching_assistant",
     ) -> ReviewReport:
         endpoint, model = self.prepare_request(config)
         prepared = prepare_llm_context(materials_text, safe_draft)
@@ -71,7 +73,15 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             file_texts=file_texts,
         ).to_dict()
         chunk_insights = self.build_chunk_insights(endpoint, model, config, materials_text, prepared.needs_chunking)
-        prompt = build_review_prompt(evidence_pack, safe_draft, chunk_insights, study_goal=study_goal, exam_type=exam_type)
+        prompt = build_review_prompt(
+            evidence_pack,
+            safe_draft,
+            chunk_insights,
+            study_goal=study_goal,
+            exam_type=exam_type,
+            detail_level=detail_level,
+            output_style=output_style,
+        )
         if len(prompt) > MAX_LLM_INPUT_CHARS:
             raise self.error(
                 "CONTEXT_TOO_LONG",
@@ -137,6 +147,8 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         file_texts: list[tuple[str, str]] | None = None,
         study_goal: StudyGoal = "balanced",
         exam_type: ExamType = "unknown",
+        detail_level: DetailLevel = "detailed",
+        output_style: OutputStyle = "teaching_assistant",
     ) -> ReviewReport:
         endpoint, model = self.prepare_request(config)
         prepared = prepare_llm_context(materials_text, safe_draft)
@@ -780,6 +792,8 @@ def normalize_anki_cards(data: dict) -> None:
 def normalize_v030_fields(data: dict) -> None:
     data.setdefault("study_goal", "balanced")
     data.setdefault("exam_type", "unknown")
+    data.setdefault("detail_level", "detailed")
+    data.setdefault("output_style", "teaching_assistant")
     for item in data.get("question_types", []) or []:
         if not isinstance(item, dict):
             continue

@@ -9,10 +9,12 @@ import {
   type ExamType,
   type ExportFormat,
   type GenerateReviewResponse,
+  type DetailLevel,
   type LLMConfig,
   type LLMTestResponse,
   type OCRConfig,
   type OptimizationGoal,
+  type OutputStyle,
   type StudyGoal,
 } from "./api/client";
 import { ChatPanel } from "./components/ChatPanel";
@@ -76,6 +78,21 @@ const EXAM_TYPES: Array<{ value: ExamType; label: string; hint: string }> = [
   { value: "coursework_report", label: "课程论文/报告", hint: "偏结构、证据和论证。" },
 ];
 
+const DETAIL_LEVELS: Array<{ value: DetailLevel; label: string; hint: string }> = [
+  { value: "concise", label: "简洁", hint: "快速抓重点，但保留题干、答案、Anki 和冲刺计划。" },
+  { value: "standard", label: "标准", hint: "覆盖核心专题、题型、模拟题和 Anki。" },
+  { value: "detailed", label: "详细", hint: "默认推荐，增加解释、例题、易错点和复习路径。" },
+  { value: "exhaustive", label: "超详细", hint: "尽量全面保留证据、变式题、解析和制卡内容。" },
+];
+
+const OUTPUT_STYLES: Array<{ value: OutputStyle; label: string; hint: string }> = [
+  { value: "sprint", label: "考前冲刺", hint: "突出最短路径和最后几天安排。" },
+  { value: "top_student_notes", label: "学霸笔记", hint: "强调结构化框架、对比和易混点。" },
+  { value: "teaching_assistant", label: "助教讲义", hint: "解释更清楚，适合系统复习。" },
+  { value: "practice_training", label: "刷题训练", hint: "强化题型套路、典型题和解析。" },
+  { value: "anki_cards", label: "Anki 制卡", hint: "增加可导出的记忆卡片。" },
+];
+
 const OPTIMIZATION_GOALS: Array<{ value: OptimizationGoal; label: string }> = [
   { value: "memorization", label: "更适合背诵" },
   { value: "practice", label: "更适合刷题" },
@@ -93,6 +110,8 @@ export default function App() {
   const [courseName, setCourseName] = useState("期末复习资料包");
   const [studyGoal, setStudyGoal] = useState<StudyGoal>("balanced");
   const [examType, setExamType] = useState<ExamType>("unknown");
+  const [detailLevel, setDetailLevel] = useState<DetailLevel>("detailed");
+  const [outputStyle, setOutputStyle] = useState<OutputStyle>("teaching_assistant");
   const [optimizationGoal, setOptimizationGoal] = useState<OptimizationGoal>("memorization");
   const [optimizing, setOptimizing] = useState(false);
   const [ocrConfig, setOcrConfig] = useState<OCRConfig>({
@@ -209,6 +228,8 @@ export default function App() {
         course_name: courseName || "期末复习资料包",
         study_goal: studyGoal,
         exam_type: examType,
+        detail_level: detailLevel,
+        output_style: outputStyle,
         ocr_config: normalizeOcrConfig(ocrConfig),
         llm_config: normalizeLlmConfig(llmConfig),
       });
@@ -258,6 +279,8 @@ export default function App() {
         optimization_goal: optimizationGoal,
         original_study_goal: studyGoal,
         original_exam_type: examType,
+        detail_level: detailLevel,
+        output_style: outputStyle,
         llm_config: normalizeLlmConfig(llmConfig),
       });
       setResult({
@@ -336,8 +359,35 @@ export default function App() {
                 </select>
                 <small>{EXAM_TYPES.find((item) => item.value === examType)?.hint}</small>
               </label>
+              <label className="field">
+                <span>生成详细度</span>
+                <select value={detailLevel} onChange={(event) => setDetailLevel(event.target.value as DetailLevel)}>
+                  {DETAIL_LEVELS.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+                <small>{DETAIL_LEVELS.find((item) => item.value === detailLevel)?.hint}</small>
+              </label>
+              <label className="field">
+                <span>输出风格</span>
+                <select value={outputStyle} onChange={(event) => setOutputStyle(event.target.value as OutputStyle)}>
+                  {OUTPUT_STYLES.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
+                <small>{OUTPUT_STYLES.find((item) => item.value === outputStyle)?.hint}</small>
+              </label>
             </div>
           </section>
+
+          <div className="quality-guide info-box">
+            <strong>为什么不直接发给大模型？</strong>
+            <p>
+              ExamForge AI 会先完成 OCR、文件解析、往年题线索提取、多文件证据整合和质量校验，
+              再让大模型进行深度整理，并最终导出 Word、PDF、Markdown 和 Anki CSV。
+              它不是普通聊天，而是一条完整的期末复习资料生产线。
+            </p>
+          </div>
 
           <FileDropzone files={files} addFiles={addFiles} removeFile={removeFile} counts={categoryCounts} />
 

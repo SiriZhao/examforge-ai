@@ -48,3 +48,36 @@ def test_generate_review_job_status_flow(monkeypatch) -> None:
             break
     else:
         raise AssertionError("job did not complete")
+
+
+def test_generate_review_job_api_alias(monkeypatch) -> None:
+    def fake_build_generate_review_response(request, progress_callback=None):
+        return GenerateReviewResponse(
+            review_report=ReviewReport(
+                title="Cloud",
+                summary="Cloud summary",
+                chapters=[],
+                high_frequency_points=[],
+                sprint_checklist=[],
+                low_priority=[],
+                insufficient_materials=[],
+                generated_at="2026-06-03T00:00:00",
+            ),
+            markdown="# Cloud",
+            download_path="/download/cloud.md",
+            download_links={"md": "/download/cloud.md"},
+            export_format="md",
+        )
+
+    monkeypatch.setattr(
+        "app.routers.generate_review_jobs.build_generate_review_response",
+        fake_build_generate_review_response,
+    )
+
+    client = TestClient(app)
+    response = client.post("/api/review/jobs", json={"files": ["demo.pdf"], "title": "Cloud"})
+    assert response.status_code == 200
+    job_id = response.json()["job_id"]
+    status_response = client.get(f"/api/review/jobs/{job_id}")
+    assert status_response.status_code == 200
+    assert status_response.json()["job_id"] == job_id

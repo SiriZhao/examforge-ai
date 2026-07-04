@@ -97,6 +97,8 @@ OptimizationGoal = Literal[
     "exam_like",
     "fix_quality",
 ]
+DetailLevel = Literal["concise", "standard", "detailed", "exhaustive"]
+OutputStyle = Literal["sprint", "top_student_notes", "teaching_assistant", "practice_training", "anki_cards"]
 
 
 class LLMConfig(BaseModel):
@@ -161,6 +163,8 @@ class GenerateReviewRequest(BaseModel):
     course_name: str | None = None
     study_goal: StudyGoal = "balanced"
     exam_type: ExamType = "unknown"
+    detail_level: DetailLevel = "detailed"
+    output_style: OutputStyle = "teaching_assistant"
     material_types: dict[str, str] = Field(default_factory=dict)
     ocr_config: OCRConfig = Field(default_factory=OCRConfig)
     llm_config: LLMConfig = Field(default_factory=LLMConfig)
@@ -314,6 +318,8 @@ class ReviewReport(BaseModel):
     summary: str
     study_goal: StudyGoal = "balanced"
     exam_type: ExamType = "unknown"
+    detail_level: DetailLevel = "detailed"
+    output_style: OutputStyle = "teaching_assistant"
     overview: dict[str, Any] = Field(default_factory=dict)
     chapters: list[ChapterReview] = Field(default_factory=list)
     study_units: list[StudyUnit] = Field(default_factory=list)
@@ -354,6 +360,8 @@ class ReoptimizeReviewRequest(BaseModel):
     optimization_goal: OptimizationGoal = "fix_quality"
     original_study_goal: StudyGoal = "balanced"
     original_exam_type: ExamType = "unknown"
+    detail_level: DetailLevel = "detailed"
+    output_style: OutputStyle = "teaching_assistant"
     llm_config: LLMConfig = Field(default_factory=LLMConfig)
 
 

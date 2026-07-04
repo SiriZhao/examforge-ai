@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.config import settings
+from app.services.cloud_runtime import runtime_dir
 
 
 class UploadResolveError(RuntimeError):
@@ -12,10 +13,10 @@ class UploadedFileNotFoundError(UploadResolveError):
 
 
 def resolve_uploaded_file(file_ref: str) -> Path:
-    upload_root = settings.upload_dir.resolve()
+    upload_root = runtime_dir(settings.upload_dir).resolve()
     candidate = Path(file_ref)
     if not candidate.is_absolute():
-        candidate = settings.upload_dir / candidate
+        candidate = upload_root / candidate
 
     resolved = candidate.resolve()
     try:

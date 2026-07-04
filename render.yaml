@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: examforge-ai
+    env: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: APP_MODE
+        value: cloud
+      - key: MAX_UPLOAD_MB
+        value: "50"
+      - key: MAX_FILES_PER_REQUEST
+        value: "10"
+      - key: JOB_TIMEOUT_SECONDS
+        value: "600"
+      - key: TEMP_FILE_TTL_HOURS
+        value: "24"
+      - key: DEFAULT_LLM_PROVIDER
+        value: deepseek
+      - key: DEFAULT_LLM_MODEL
+        value: deepseek-v4-flash
+      - key: DEFAULT_LLM_BASE_URL
+        value: https://api.deepseek.com
+      - key: ENABLE_RAPIDOCR
+        value: "true"
+      - key: ENABLE_TESSERACT
+        value: "false"
+      - key: ENABLE_CLOUD_SAFE_MODE
+        value: "true"

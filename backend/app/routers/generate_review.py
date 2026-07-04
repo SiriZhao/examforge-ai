@@ -17,6 +17,7 @@ from app.services.export_service import (
     export_review_report,
     report_download_filename,
 )
+from app.services.cloud_runtime import runtime_dir
 from app.services.file_parser import ParseError, parse_file
 from app.services.generator import generate_markdown_review
 from app.services.llm_service import generate_review_summary
@@ -35,7 +36,24 @@ logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[int, str], None]
 
 
+def with_server_default_llm(config):
+    if config.api_key:
+        return config
+    provider = config.provider or settings.default_llm_provider
+    key = settings.deepseek_api_key if provider == "deepseek" else settings.openai_api_key
+    if not key:
+        return config
+    merged = config.model_copy(deep=True)
+    merged.enabled = True
+    merged.provider = provider
+    merged.model = merged.model or settings.default_llm_model
+    merged.base_url = merged.base_url or settings.default_llm_base_url
+    merged.api_key = key
+    return merged
+
+
 @router.post("/generate-review", response_model=GenerateReviewResponse)
+@router.post("/api/generate-review", response_model=GenerateReviewResponse)
 def generate_review(request: GenerateReviewRequest) -> GenerateReviewResponse:
     return build_generate_review_response(request)
 
@@ -54,11 +72,13 @@ def reoptimize_review(request: ReoptimizeReviewRequest) -> ReoptimizeReviewRespo
         llm_result = generate_review_summary(
             evidence_text,
             optimized,
-            request.llm_config,
+            with_server_default_llm(request.llm_config),
             course_name=optimized.title,
             file_texts=[("current_report.md", evidence_text)],
             study_goal=request.original_study_goal,
             exam_type=request.original_exam_type,
+            detail_level=request.detail_level,
+            output_style=request.output_style,
         )
         candidate = llm_result.report
     else:
@@ -149,6 +169,8 @@ def build_generate_review_response(
         study_goal=request.study_goal,
         exam_type=request.exam_type,
     )
+    safe_draft.detail_level = request.detail_level
+    safe_draft.output_style = request.output_style
     logger.info("Safe draft generation completed: chapter_count=%s", len(safe_draft.chapters))
 
     if progress_callback:
@@ -166,15 +188,19 @@ def build_generate_review_response(
     llm_result = generate_review_summary(
         combined_text,
         safe_draft,
-        request.llm_config,
+        with_server_default_llm(request.llm_config),
         course_name=report_title,
         file_texts=file_texts,
         study_goal=request.study_goal,
         exam_type=request.exam_type,
+        detail_level=request.detail_level,
+        output_style=request.output_style,
     )
     report = llm_result.report
     report.study_goal = request.study_goal
     report.exam_type = request.exam_type
+    report.detail_level = request.detail_level
+    report.output_style = request.output_style
     quality = validate_report_quality(
         report,
         combined_text,
@@ -194,7 +220,8 @@ def build_generate_review_response(
     download_links = {}
     anki_csv_download_path = None
     try:
-        anki_path = export_anki_csv(report, settings.output_dir, anki_download_filename(report_title))
+        output_dir = runtime_dir(settings.output_dir)
+        anki_path = export_anki_csv(report, output_dir, anki_download_filename(report_title))
         anki_csv_download_path = f"/download/{anki_path.name}"
         for export_index, export_format in enumerate(export_formats, start=1):
             if progress_callback:
@@ -204,7 +231,7 @@ def build_generate_review_response(
             output_path = export_review_report(
                 report=report,
                 markdown=markdown,
-                output_dir=settings.output_dir,
+                output_dir=output_dir,
                 basename=report_download_filename(report_title, export_format).rsplit(".", 1)[0],
                 export_format=export_format,
             )

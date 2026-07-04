@@ -1,0 +1,26 @@
+app = "examforge-ai"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_MODE = "cloud"
+  PORT = "8000"
+  MAX_UPLOAD_MB = "50"
+  MAX_FILES_PER_REQUEST = "10"
+  JOB_TIMEOUT_SECONDS = "600"
+  TEMP_FILE_TTL_HOURS = "24"
+  DEFAULT_LLM_PROVIDER = "deepseek"
+  DEFAULT_LLM_MODEL = "deepseek-v4-flash"
+  DEFAULT_LLM_BASE_URL = "https://api.deepseek.com"
+  ENABLE_RAPIDOCR = "true"
+  ENABLE_TESSERACT = "false"
+  ENABLE_CLOUD_SAFE_MODE = "true"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0

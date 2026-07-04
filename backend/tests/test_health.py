@@ -8,6 +8,20 @@ def test_health_check() -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "0.3.2"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["version"] == "0.4.0"
+    assert body["mode"] in {"local_dev", "desktop", "cloud"}
+    assert "llm_server_configured" in body
+
+
+def test_api_health_does_not_expose_llm_key() -> None:
+    client = TestClient(app)
+    response = client.get("/api/health")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "api_key" not in body
+    assert "DEEPSEEK_API_KEY" not in str(body)
 
 

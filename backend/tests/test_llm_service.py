@@ -174,12 +174,21 @@ def test_deepseek_default_model_is_v4_flash() -> None:
 
 def test_prompt_prioritizes_quality_and_does_not_force_fixed_types() -> None:
     report = generate_review_report(MATERIALS)
-    prompt = build_review_prompt({"course_name": "demo", "files": [], "global_signals": {}, "chunks": []}, report, [])
+    prompt = build_review_prompt(
+        {"course_name": "demo", "files": [], "global_signals": {}, "chunks": []},
+        report,
+        [],
+        detail_level="detailed",
+        output_style="practice_training",
+    )
 
     assert "不要把题型强行归入固定题型库" in prompt
     assert "质量优先于节省 token" in prompt
     assert "优先参考真实题干结构和题型线索" in prompt
     assert "不要固定套用" in prompt
+    assert "生成详细度：detailed" in prompt
+    assert "输出风格：practice_training" in prompt
+    assert "像刷题训练册一样组织" in prompt
 
 
 def test_llm_success_with_deepseek_v4_flash(monkeypatch) -> None:

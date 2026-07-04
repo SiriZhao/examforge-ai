@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.config import settings
 from app.schemas.review import LLMErrorInfo, LLMTestRequest, LLMTestResponse
 from app.services.llm_providers import get_llm_provider
 from app.services.llm_providers.base import LLMProviderError
@@ -9,6 +10,12 @@ router = APIRouter(prefix="/api/llm", tags=["llm"])
 
 @router.post("/test", response_model=LLMTestResponse)
 def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
+    if not request.api_key and settings.llm_server_configured:
+        request = request.model_copy(deep=True)
+        request.provider = request.provider or settings.default_llm_provider
+        request.model = request.model or settings.default_llm_model
+        request.base_url = request.base_url or settings.default_llm_base_url
+        request.api_key = settings.deepseek_api_key if request.provider == "deepseek" else settings.openai_api_key
     provider = get_llm_provider(request.provider)
     model = request.model or provider.default_model
     try:
@@ -41,4 +48,3 @@ def test_llm_connection(request: LLMTestRequest) -> LLMTestResponse:
                 fallback_used=False,
             ),
         )
-

@@ -12,6 +12,8 @@ from app.schemas.review import (
     ReviewReport,
     StudyGoal,
     ExamType,
+    DetailLevel,
+    OutputStyle,
 )
 from app.services.llm_providers import get_llm_provider
 from app.services.llm_providers.base import LLMProviderError
@@ -39,6 +41,8 @@ def generate_review_summary(
     file_texts: list[tuple[str, str]] | None = None,
     study_goal: StudyGoal = "balanced",
     exam_type: ExamType = "unknown",
+    detail_level: DetailLevel = "detailed",
+    output_style: OutputStyle = "teaching_assistant",
 ) -> LLMEnhancementResult:
     provider_name = config.provider or "deepseek"
     enabled = bool(config.enabled)
@@ -88,6 +92,8 @@ def generate_review_summary(
             file_texts=file_texts,
             study_goal=study_goal,
             exam_type=exam_type,
+            detail_level=detail_level,
+            output_style=output_style,
         )
         context_strategy = getattr(provider, "last_context_strategy", "direct")
         elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -134,6 +140,8 @@ def generate_review_summary(
             file_texts=file_texts,
             study_goal=study_goal,
             exam_type=exam_type,
+            detail_level=detail_level,
+            output_style=output_style,
         )
         if outline_report is not None:
             return LLMEnhancementResult(
@@ -184,6 +192,8 @@ def generate_review_summary(
             file_texts=file_texts,
             study_goal=study_goal,
             exam_type=exam_type,
+            detail_level=detail_level,
+            output_style=output_style,
         )
         if outline_report is not None:
             return LLMEnhancementResult(
@@ -215,6 +225,8 @@ def try_improve_safe_draft_outline(
     file_texts: list[tuple[str, str]] | None,
     study_goal: StudyGoal,
     exam_type: ExamType,
+    detail_level: DetailLevel = "detailed",
+    output_style: OutputStyle = "teaching_assistant",
 ) -> ReviewReport | None:
     if error_code in {"CONFIG_MISSING", "AUTH_FAILED"}:
         return None
@@ -231,6 +243,8 @@ def try_improve_safe_draft_outline(
             file_texts=file_texts,
             study_goal=study_goal,
             exam_type=exam_type,
+            detail_level=detail_level,
+            output_style=output_style,
         )
         logger.info("LLM outline naming fallback succeeded.")
         return sanitize_report(improved)

@@ -1,8 +1,8 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ??
-  (window.location.port === "5173" ? "http://127.0.0.1:8000" : window.location.origin);
+  import.meta.env.VITE_API_BASE_URL ||
+  (window.location.port === "5173" ? "http://127.0.0.1:8000" : `${window.location.origin}/api`);
 
 const api = axios.create({ baseURL: API_BASE_URL });
 
@@ -40,6 +40,8 @@ export type ExamType =
   | "oral_presentation"
   | "coursework_report";
 export type OptimizationGoal = "memorization" | "practice" | "anki" | "concise" | "detailed" | "sprint" | "exam_like" | "fix_quality";
+export type DetailLevel = "concise" | "standard" | "detailed" | "exhaustive";
+export type OutputStyle = "sprint" | "top_student_notes" | "teaching_assistant" | "practice_training" | "anki_cards";
 
 export type OCRConfig = {
   provider: "rapidocr" | "local_tesseract" | "custom_api" | "openai_vision" | "baidu_ocr";
@@ -197,6 +199,8 @@ export type ReviewReport = {
   summary: string;
   study_goal?: StudyGoal;
   exam_type?: ExamType;
+  detail_level?: DetailLevel;
+  output_style?: OutputStyle;
   overview?: Record<string, unknown>;
   chapters: ChapterReview[];
   study_units?: StudyUnit[];
@@ -248,7 +252,7 @@ export type GenerateReviewResponse = {
 
 export type GenerateReviewJob = {
   job_id: string;
-  status: "queued" | "running" | "completed" | "failed";
+  status: "pending" | "parsing" | "ocr" | "building_evidence" | "llm" | "validating" | "exporting" | "completed" | "failed" | "queued" | "running";
   progress: number;
   message: string;
   result: GenerateReviewResponse | null;
@@ -283,6 +287,8 @@ export type GenerateReviewParams = {
   course_name?: string;
   study_goal?: StudyGoal;
   exam_type?: ExamType;
+  detail_level?: DetailLevel;
+  output_style?: OutputStyle;
   ocr_config: OCRConfig;
   llm_config: LLMConfig;
 };
@@ -307,6 +313,8 @@ export async function reoptimizeReview(params: {
   optimization_goal: OptimizationGoal;
   original_study_goal: StudyGoal;
   original_exam_type: ExamType;
+  detail_level?: DetailLevel;
+  output_style?: OutputStyle;
   llm_config: LLMConfig;
 }): Promise<{ review_report: ReviewReport; markdown: string; optimized: boolean; message: string; quality: ReportQuality }> {
   return request("/api/review/reoptimize", {
@@ -317,7 +325,7 @@ export async function reoptimizeReview(params: {
 }
 
 export async function createGenerateReviewJob(params: GenerateReviewParams): Promise<{ job_id: string }> {
-  return request<{ job_id: string }>("/generate-review-jobs", {
+  return request<{ job_id: string }>("/review/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -325,7 +333,7 @@ export async function createGenerateReviewJob(params: GenerateReviewParams): Pro
 }
 
 export async function getGenerateReviewJob(jobId: string): Promise<GenerateReviewJob> {
-  return request<GenerateReviewJob>(`/generate-review-jobs/${jobId}`, { method: "GET" });
+  return request<GenerateReviewJob>(`/review/jobs/${jobId}`, { method: "GET" });
 }
 
 export async function testLLMConnection(config: LLMConfig): Promise<LLMTestResponse> {
@@ -361,10 +369,12 @@ export async function generateMockExam(
 
 export function downloadUrl(downloadPath: string): string {
   if (downloadPath.startsWith("/")) {
-    return `${API_BASE_URL}${downloadPath}`;
+    const root = API_BASE_URL.endsWith("/api") ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
+    return `${root}${downloadPath}`;
   }
   const filename = downloadPath.split(/[\\/]/).pop();
-  return filename ? `${API_BASE_URL}/download/${encodeURIComponent(filename)}` : "#";
+  const root = API_BASE_URL.endsWith("/api") ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
+  return filename ? `${root}/download/${encodeURIComponent(filename)}` : "#";
 }
 
 export function downloadFilename(downloadPath: string): string | undefined {
