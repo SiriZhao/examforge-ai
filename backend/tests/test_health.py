@@ -13,6 +13,9 @@ def test_health_check() -> None:
     assert body["version"] == "0.4.0"
     assert body["mode"] in {"local_dev", "desktop", "cloud"}
     assert "llm_server_configured" in body
+    assert "llm_provider_configured" in body
+    assert "ocr_available" in body
+    assert "storage_writable" in body
 
 
 def test_api_health_does_not_expose_llm_key() -> None:

@@ -9,7 +9,13 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.routers import analyze, chat, download, export, generate_review, generate_review_jobs, llm, mock_exam, parse, upload
-from app.services.cloud_runtime import cleanup_runtime_files, ensure_runtime_directories, frontend_static_dir
+from app.services.cloud_runtime import (
+    cleanup_runtime_files,
+    ensure_runtime_directories,
+    frontend_static_dir,
+    is_ocr_available,
+    is_storage_writable,
+)
 from app.utils.error_handlers import register_error_handlers
 from app.utils.logging_config import configure_logging
 
@@ -52,7 +58,12 @@ def health_check() -> dict[str, str | bool]:
         "status": "ok",
         "version": settings.app_version,
         "mode": settings.app_mode,
+        "app_mode": settings.app_mode,
         "llm_server_configured": settings.llm_server_configured,
+        "llm_provider_configured": settings.llm_server_configured,
+        "default_llm_model": settings.default_llm_model,
+        "ocr_available": is_ocr_available(),
+        "storage_writable": is_storage_writable(),
         "public_base_url": settings.public_base_url,
     }
 

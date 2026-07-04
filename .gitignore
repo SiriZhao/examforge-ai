@@ -40,6 +40,7 @@ backend/cache/*
 !backend/outputs/.gitkeep
 !backend/cache/.gitkeep
 !backend/cache/ocr/
+backend/cache/ocr/*
 !backend/cache/ocr/.gitkeep
 
 # OCR data

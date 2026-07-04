@@ -37,6 +37,38 @@ def cleanup_runtime_files() -> int:
     return removed
 
 
+def is_storage_writable() -> bool:
+    try:
+        root = runtime_dir(settings.output_dir)
+        root.mkdir(parents=True, exist_ok=True)
+        probe = root / ".write_probe"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def is_ocr_available() -> bool:
+    if not settings.enable_local_ocr:
+        return False
+    if settings.enable_rapidocr:
+        try:
+            import rapidocr_onnxruntime  # noqa: F401
+
+            return True
+        except Exception:
+            pass
+    if settings.enable_tesseract:
+        try:
+            import pytesseract  # noqa: F401
+
+            return True
+        except Exception:
+            return False
+    return False
+
+
 def frontend_static_dir() -> Path:
     candidates = [
         Path(__file__).resolve().parents[1] / "static",

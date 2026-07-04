@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.main import app
 from app.schemas.review import GenerateReviewResponse, ReviewReport
 
@@ -81,3 +82,22 @@ def test_generate_review_job_api_alias(monkeypatch) -> None:
     status_response = client.get(f"/api/review/jobs/{job_id}")
     assert status_response.status_code == 200
     assert status_response.json()["job_id"] == job_id
+
+
+def test_cloud_mode_rejects_unscoped_download(tmp_path) -> None:
+    output_dir = tmp_path / "outputs"
+    output_dir.mkdir()
+    (output_dir / "demo.md").write_text("# demo", encoding="utf-8")
+    original_mode = settings.app_mode
+    original_output = settings.output_dir
+    settings.app_mode = "cloud"
+    settings.output_dir = output_dir
+    client = TestClient(app)
+    try:
+        response = client.get("/download/demo.md")
+    finally:
+        settings.app_mode = original_mode
+        settings.output_dir = original_output
+
+    assert response.status_code == 404
+    assert "job-scoped" in response.json()["detail"]

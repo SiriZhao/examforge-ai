@@ -78,6 +78,14 @@ fly deploy
 | Desktop | Private or offline use | Files stay on the user's machine | Requires downloading the exe |
 | Local Dev | Contributors | Vite + FastAPI debugging | Requires dev dependencies |
 
+### Privacy, Disclaimer, and Commercial Use Notes
+
+- License: this project uses the MIT License. See [LICENSE](LICENSE).
+- Privacy: see [docs/privacy.md](docs/privacy.md).
+- Disclaimer: see [docs/disclaimer.md](docs/disclaimer.md).
+- Commercial deployments should review third-party dependency licenses, LLM provider terms, OCR provider terms, school/institution rules, data retention policy, and local regulations.
+- Public cloud deployments should add rate limiting, access control, monitoring, abuse prevention, and budget controls before large-scale use.
+
 ### Why Not Just ChatGPT / NotebookLM?
 
 ExamForge AI first performs OCR, file parsing, past-exam signal extraction, multi-file evidence integration, and quality checks. Then it lets the LLM reorganize the material and exports Word, PDF, Markdown, and Anki CSV. It is a review-pack production workflow, not just a chat box.

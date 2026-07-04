@@ -12,6 +12,11 @@ router = APIRouter()
 
 @router.get("/download/{filename}")
 def download_file(filename: str) -> FileResponse:
+    if settings.app_mode == "cloud":
+        raise HTTPException(
+            status_code=404,
+            detail="Cloud mode requires job-scoped download URLs. Use /api/review/jobs/{job_id}/download/{format}.",
+        )
     safe_name = Path(filename).name
     if safe_name != filename:
         raise HTTPException(status_code=400, detail="下载文件名无效。")
