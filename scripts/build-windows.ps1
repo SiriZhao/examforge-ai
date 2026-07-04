@@ -46,14 +46,17 @@ function Find-InnoCompiler {
 
 function Stop-RunningExamForge {
     $running = Get-Process -Name "ExamForgeAI" -ErrorAction SilentlyContinue
-    if (-not $running) { return }
+    $uvicorn = Get-Process -Name "uvicorn" -ErrorAction SilentlyContinue
+    $processes = @($running) + @($uvicorn)
+    $processes = $processes | Where-Object { $_ }
+    if (-not $processes) { return }
 
-    Write-Host "ExamForgeAI.exe is running. Attempting to stop it before rebuilding..." -ForegroundColor Yellow
-    foreach ($process in $running) {
+    Write-Host "ExamForge AI related processes are running. Attempting to stop them before rebuilding..." -ForegroundColor Yellow
+    foreach ($process in $processes) {
         try {
             Stop-Process -Id $process.Id -Force -ErrorAction Stop
         } catch {
-            throw "ExamForgeAI.exe is currently running and could not be stopped. Please close ExamForge AI and rerun scripts\build-windows.ps1."
+            throw "A running ExamForge AI process could not be stopped. Please close ExamForge AI and rerun scripts\build-windows.ps1."
         }
     }
     Start-Sleep -Seconds 1
@@ -79,6 +82,14 @@ try {
     Push-Location $frontend
     npm run build
     Pop-Location
+    $frontendIndex = Join-Path $frontend "dist\index.html"
+    $frontendAssets = Join-Path $frontend "dist\assets"
+    if (-not (Test-Path $frontendIndex)) {
+        throw "Frontend build failed: $frontendIndex was not generated."
+    }
+    if (-not (Test-Path $frontendAssets)) {
+        throw "Frontend build failed: $frontendAssets was not generated."
+    }
 
     Step "Prepare backend virtual environment"
     if (-not (Test-Path $pythonExe)) {
@@ -107,7 +118,7 @@ try {
     }
 
     Step "Build Windows executable with PyInstaller"
-    & $pythonExe -m PyInstaller ExamForgeAI.spec --noconfirm
+    & $pythonExe -m PyInstaller ExamForgeAI.spec --clean --noconfirm
 
     $exePath = Join-Path $distDir "ExamForgeAI.exe"
     if (-not (Test-Path $exePath)) {

@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from threading import Lock
+from urllib.parse import unquote
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -68,7 +69,7 @@ def download_generate_review_job_file(job_id: str, export_format: str) -> FileRe
     if not download_path:
         raise HTTPException(status_code=404, detail="Requested export is not available.")
 
-    filename = str(download_path).split("/")[-1].split("\\")[-1]
+    filename = unquote(str(download_path).split("/")[-1].split("\\")[-1])
     file_path = (runtime_dir(settings.output_dir) / filename).resolve()
     output_root = runtime_dir(settings.output_dir).resolve()
     try:

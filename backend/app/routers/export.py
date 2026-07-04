@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
@@ -23,4 +25,4 @@ def export_review(request: ExportRequest) -> ExportResponse:
     analysis = analyze_content(request.file_id, content, None)
     output = generate_markdown_review(analysis)
     output_path = write_output(settings.output_dir, request.file_id, output)
-    return ExportResponse(file_id=request.file_id, output_path=f"/download/{output_path.name}")
+    return ExportResponse(file_id=request.file_id, output_path=f"/download/{quote(output_path.name)}")

@@ -2,9 +2,9 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
@@ -12,7 +12,8 @@ from app.routers import analyze, chat, download, export, generate_review, genera
 from app.services.cloud_runtime import (
     cleanup_runtime_files,
     ensure_runtime_directories,
-    frontend_static_dir,
+    find_frontend_dist,
+    frontend_static_candidates,
     is_ocr_available,
     is_storage_writable,
 )
@@ -68,24 +69,30 @@ def health_check() -> dict[str, str | bool]:
     }
 
 
-static_dir = frontend_static_dir()
-if (static_dir / "index.html").exists():
+static_dir = find_frontend_dist()
+if static_dir:
     assets_dir = static_dir / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 
-@app.get("/{full_path:path}", include_in_schema=False)
-def serve_frontend(full_path: str, request: Request) -> FileResponse:
+@app.get("/{full_path:path}", include_in_schema=False, response_model=None)
+def serve_frontend(full_path: str):
     if full_path.startswith(("api/", "download/", "upload", "generate-review", "generate-review-jobs")):
-        # Let FastAPI's 404 response handle unknown API-like routes instead of serving the SPA.
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="Not found")
-    index = static_dir / "index.html"
-    if index.exists():
-        return FileResponse(index)
-    from fastapi import HTTPException
-
-    raise HTTPException(status_code=404, detail="Frontend build not found. Run npm run build first.")
+    if static_dir:
+        return FileResponse(static_dir / "index.html")
+    attempted = [str(path) for path in frontend_static_candidates()]
+    return JSONResponse(
+        {
+            "error": True,
+            "message": "Frontend build not found.",
+            "detail": (
+                "Packaged frontend assets were not found. Run npm run build and ensure "
+                "frontend/dist is included in PyInstaller datas."
+            ),
+            "attempted_paths": attempted,
+        },
+        status_code=500,
+    )
 

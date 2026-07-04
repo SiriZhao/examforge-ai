@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
+import sys
 
 from app.config import settings
 
@@ -69,13 +70,53 @@ def is_ocr_available() -> bool:
     return False
 
 
-def frontend_static_dir() -> Path:
+def is_pyinstaller_bundle() -> bool:
+    return bool(getattr(sys, "frozen", False)) and hasattr(sys, "_MEIPASS")
+
+
+def bundled_base_dir() -> Path | None:
+    if is_pyinstaller_bundle():
+        return Path(getattr(sys, "_MEIPASS"))
+    return None
+
+
+def frontend_static_candidates() -> list[Path]:
+    candidates: list[Path] = []
+    bundle_root = bundled_base_dir()
+    if bundle_root:
+        candidates.extend(
+            [
+                bundle_root / "frontend" / "dist",
+                bundle_root / "frontend_dist",
+                bundle_root / "static",
+                bundle_root / "web",
+            ]
+        )
+
+    app_root = Path(__file__).resolve().parents[1]
+    backend_root = Path(__file__).resolve().parents[2]
+    repo_root = Path(__file__).resolve().parents[3]
     candidates = [
-        Path(__file__).resolve().parents[1] / "static",
-        Path(__file__).resolve().parents[2] / "static",
-        Path(__file__).resolve().parents[3] / "frontend" / "dist",
+        *candidates,
+        app_root / "static",
+        backend_root / "static",
+        repo_root / "frontend" / "dist",
+        repo_root / "backend" / "static",
+        repo_root / "static",
     ]
-    for candidate in candidates:
+    return candidates
+
+
+def find_frontend_dist() -> Path | None:
+    for candidate in frontend_static_candidates():
         if (candidate / "index.html").exists():
             return candidate
+    return None
+
+
+def frontend_static_dir() -> Path:
+    found = find_frontend_dist()
+    if found:
+        return found
+    candidates = frontend_static_candidates()
     return candidates[0]

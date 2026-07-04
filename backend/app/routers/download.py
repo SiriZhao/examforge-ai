@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import unquote
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -17,6 +18,7 @@ def download_file(filename: str) -> FileResponse:
             status_code=404,
             detail="Cloud mode requires job-scoped download URLs. Use /api/review/jobs/{job_id}/download/{format}.",
         )
+    filename = unquote(filename)
     safe_name = Path(filename).name
     if safe_name != filename:
         raise HTTPException(status_code=400, detail="下载文件名无效。")

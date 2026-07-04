@@ -10,7 +10,6 @@ import webbrowser
 from pathlib import Path
 
 import uvicorn
-from fastapi.staticfiles import StaticFiles
 
 
 APP_NAME = "ExamForgeAI"
@@ -38,9 +37,12 @@ def configure_runtime_dirs() -> tuple[Path, Path, Path]:
     outputs.mkdir(parents=True, exist_ok=True)
     logs.mkdir(parents=True, exist_ok=True)
 
+    os.environ["ERA_APP_MODE"] = "desktop"
+    os.environ["ERA_APP_NAME"] = DISPLAY_NAME
+    os.environ["ERA_STORAGE_DIR"] = str(data_dir)
     os.environ["ERA_UPLOAD_DIR"] = str(uploads)
     os.environ["ERA_OUTPUT_DIR"] = str(outputs)
-    os.environ["ERA_APP_NAME"] = DISPLAY_NAME
+    os.environ["ERA_OCR_CACHE_DIR"] = str(data_dir / "cache" / "ocr")
     return uploads, outputs, logs
 
 
@@ -61,12 +63,21 @@ def find_free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def mount_frontend(app) -> None:
-    frontend_dist = resource_path("frontend_dist")
-    index_file = frontend_dist / "index.html"
-    if not index_file.exists():
-        raise RuntimeError(f"Frontend assets were not found: {frontend_dist}")
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+def frontend_asset_candidates() -> list[Path]:
+    return [
+        resource_path("frontend", "dist"),
+        resource_path("frontend_dist"),
+        resource_path("static"),
+        resource_path("web"),
+    ]
+
+
+def verify_frontend_assets() -> Path:
+    for candidate in frontend_asset_candidates():
+        if (candidate / "index.html").exists():
+            return candidate
+    attempted = "\n".join(str(path) for path in frontend_asset_candidates())
+    raise RuntimeError(f"Frontend assets were not found. Attempted paths:\n{attempted}")
 
 
 def open_browser_later(url: str) -> None:
@@ -80,7 +91,7 @@ def show_failure_message(message: str, log_path: Path) -> None:
 
         ctypes.windll.user32.MessageBoxW(
             0,
-            f"{message}\n\n日志文件：{log_path}",
+            f"{message}\n\nLog file: {log_path}",
             DISPLAY_NAME,
             0x10,
         )
@@ -97,10 +108,11 @@ def main() -> None:
     try:
         logger.info("Starting %s", DISPLAY_NAME)
         logger.info("User data directory: %s", user_data_dir())
+        frontend_dir = verify_frontend_assets()
+        logger.info("Frontend assets directory: %s", frontend_dir)
 
         from app.main import app
 
-        mount_frontend(app)
         port = find_free_port()
         url = f"http://127.0.0.1:{port}"
         logger.info("Serving local app at %s", url)
@@ -118,7 +130,7 @@ def main() -> None:
         logger.error("Desktop startup failed: %s", exc)
         logger.error(traceback.format_exc())
         show_failure_message(
-            "ExamForge AI 启动失败。请查看日志文件，或重新安装后再试。",
+            "ExamForge AI failed to start. Please check the log file or reinstall the app.",
             log_path,
         )
         raise

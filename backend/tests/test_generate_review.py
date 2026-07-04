@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import unquote
 
 from fastapi.testclient import TestClient
 
@@ -71,8 +72,9 @@ def test_generate_review_exports_markdown_and_anki(
     assert body["download_path"].endswith(".md")
     assert body["download_links"]["md"].endswith(".md")
     assert body["anki_csv_download_path"].startswith("/download/")
-    assert body["download_links"]["md"].endswith("植物学下_复习资料包.md")
-    assert body["anki_csv_download_path"].endswith("植物学下_Anki卡片.csv")
+    assert body["download_links"]["md"].endswith(".md")
+    assert unquote(body["download_links"]["md"]).endswith("植物学下_复习资料包.md")
+    assert unquote(body["anki_csv_download_path"]).endswith("植物学下_Anki卡片.csv")
     assert body["review_report"]["past_exam_analysis"]["detected_files"]
     assert body["review_report"]["mock_exam"]["questions"]
     assert body["review_report"]["anki_cards"]

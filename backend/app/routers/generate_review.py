@@ -1,5 +1,7 @@
 import logging
 from collections.abc import Callable
+from urllib.parse import quote
+
 from fastapi import APIRouter, HTTPException
 
 from app.config import settings
@@ -34,6 +36,10 @@ from app.services.upload_resolver import (
 router = APIRouter()
 logger = logging.getLogger(__name__)
 ProgressCallback = Callable[[int, str], None]
+
+
+def download_url(filename: str) -> str:
+    return f"/download/{quote(filename)}"
 
 
 def with_server_default_llm(config):
@@ -222,7 +228,7 @@ def build_generate_review_response(
     try:
         output_dir = runtime_dir(settings.output_dir)
         anki_path = export_anki_csv(report, output_dir, anki_download_filename(report_title))
-        anki_csv_download_path = f"/download/{anki_path.name}"
+        anki_csv_download_path = download_url(anki_path.name)
         for export_index, export_format in enumerate(export_formats, start=1):
             if progress_callback:
                 export_progress = 86 + int((export_index / max(len(export_formats), 1)) * 12)
@@ -235,7 +241,7 @@ def build_generate_review_response(
                 basename=report_download_filename(report_title, export_format).rsplit(".", 1)[0],
                 export_format=export_format,
             )
-            download_links[export_format] = f"/download/{output_path.name}"
+            download_links[export_format] = download_url(output_path.name)
             logger.info("Export completed: format=%s filename=%s", export_format, output_path.name)
     except ExportError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -5,9 +5,12 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 
 root = Path.cwd()
+frontend_dist = root / "frontend" / "dist"
+if not (frontend_dist / "index.html").exists():
+    raise SystemExit("frontend/dist/index.html was not found. Run npm run build before PyInstaller.")
 
 datas = [
-    (str(root / "frontend" / "dist"), "frontend_dist"),
+    (str(frontend_dist), "frontend/dist"),
     (str(root / "backend" / "app"), "app"),
 ]
 binaries = []
