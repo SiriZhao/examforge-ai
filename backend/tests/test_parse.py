@@ -63,14 +63,25 @@ def test_parse_rejects_paths_outside_uploads(tmp_path: Path) -> None:
 
 def test_parse_rejects_unsupported_file_type(tmp_path: Path) -> None:
     settings.upload_dir = tmp_path
-    uploaded = tmp_path / "notes.txt"
-    uploaded.write_text("plain text", encoding="utf-8")
+    uploaded = tmp_path / "tool.exe"
+    uploaded.write_bytes(b"not allowed")
     client = TestClient(app)
 
     response = client.post("/parse", json={"files": [uploaded.name]})
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "不支持解析该文件类型：.txt。"
+    assert "exe" in response.json()["detail"]
+
+
+def test_text_parse_reads_text(tmp_path: Path) -> None:
+    text_path = tmp_path / "notes.txt"
+    text_path.write_text("plain text review notes", encoding="utf-8")
+
+    parsed = file_parser.parse_file(text_path)
+
+    assert parsed.file_type == ".txt"
+    assert parsed.pages[0].source == "text_extract"
+    assert parsed.raw_text == "plain text review notes"
 
 
 def test_markdown_parse_reads_text(tmp_path: Path) -> None:

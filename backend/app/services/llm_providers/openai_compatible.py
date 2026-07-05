@@ -17,6 +17,7 @@ from app.services.llm_service_prompt import (
     CONTEXT_TOO_LONG_MESSAGE,
     MAX_LLM_INPUT_CHARS,
     build_chunk_summary_prompt,
+    build_compact_review_prompt,
     build_outline_naming_prompt,
     build_review_prompt,
     prepare_llm_context,
@@ -83,6 +84,18 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             output_style=output_style,
         )
         if len(prompt) > MAX_LLM_INPUT_CHARS:
+            logger.info("LLM final prompt exceeded budget; switching to compact synthesis. prompt_chars=%s", len(prompt))
+            self.last_context_strategy = "chunked"
+            prompt = build_compact_review_prompt(
+                evidence_pack,
+                safe_draft,
+                chunk_insights,
+                study_goal=study_goal,
+                exam_type=exam_type,
+                detail_level=detail_level,
+                output_style=output_style,
+            )
+        if len(prompt) > MAX_LLM_INPUT_CHARS:
             raise self.error(
                 "CONTEXT_TOO_LONG",
                 "资料过长，大模型深度整理未完成。",
@@ -91,7 +104,24 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
                 model=model,
             )
 
-        report = self.request_review_report(endpoint, model, config, prompt, timeout=100)
+        try:
+            report = self.request_review_report(endpoint, model, config, prompt, timeout=100)
+        except LLMProviderError as exc:
+            if exc.error.code != "CONTEXT_TOO_LONG":
+                raise
+            logger.info("LLM final synthesis hit CONTEXT_TOO_LONG; retrying with compact evidence pack.")
+            self.last_context_strategy = "chunked"
+            compact_prompt = build_compact_review_prompt(
+                evidence_pack,
+                safe_draft,
+                chunk_insights,
+                study_goal=study_goal,
+                exam_type=exam_type,
+                detail_level=detail_level,
+                output_style=output_style,
+                budget=int(MAX_LLM_INPUT_CHARS * 0.55),
+            )
+            report = self.request_review_report(endpoint, model, config, compact_prompt, timeout=100)
         fill_export_fallbacks(report, safe_draft)
         quality = validate_report_quality(report, materials_text, study_goal=study_goal, exam_type=exam_type, file_count=len(file_texts or []))
         report.quality = quality.to_model()
@@ -240,6 +270,10 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
                 logger.info("LLM chunk insight completed: index=%s", index)
             except LLMProviderError as exc:
                 logger.warning("LLM chunk insight failed: index=%s code=%s", index, exc.error.code)
+                fallback = local_chunk_insight(chunk, index, len(chunks))
+                insights.append(fallback)
+                logger.info("LLM chunk insight fallback used: index=%s chars=%s", index, len(fallback))
+                continue
                 raise self.error(
                     "CONTEXT_TOO_LONG",
                     "资料过长，大模型分块理解未完成。",
@@ -947,6 +981,54 @@ def fill_export_fallbacks(report: ReviewReport, safe_draft: ReviewReport) -> Non
         report.sprint_plans = safe_draft.sprint_plans
     if not report.high_frequency_points:
         report.high_frequency_points = safe_draft.high_frequency_points
+
+
+def local_chunk_insight(chunk: str, index: int, total: int) -> str:
+    lines = [compact_text(line) for line in chunk.splitlines() if compact_text(line)]
+    scored = sorted(lines, key=local_line_score, reverse=True)
+    evidence = dedupe_strings([line for line in scored if len(line) >= 8][:10])
+    questions = [
+        line
+        for line in evidence
+        if re.search(r"\?|？|题|计算|证明|分析|解释|比较|选择|填空|answer|question", line, re.I)
+    ][:6]
+    definitions = [
+        line
+        for line in evidence
+        if re.search(r"定义|是指|称为|defined as|refers to|means", line, re.I)
+    ][:6]
+    formulas = [
+        clean_formula_text(line)
+        for line in evidence
+        if re.search(r"[=+\-*/∑√∫≥≤]|\bP\(|\bE\(|Var\(", line)
+    ][:6]
+    terms = dedupe_strings(re.findall(r"[\u4e00-\u9fff]{2,8}|[A-Za-z][A-Za-z0-9_-]{2,}", "\n".join(evidence)))[:12]
+    return "\n".join(
+        [
+            f"本块主题：材料分块 {index}/{total}，关键词：{'、'.join(terms[:8]) or '未识别明确关键词'}",
+            f"关键概念：{'；'.join(terms[:10]) or '请结合原文证据复习'}",
+            f"重要定义：{'；'.join(definitions) or '未发现显式定义'}",
+            f"公式/方法：{'；'.join([item for item in formulas if item]) or '未发现清晰公式'}",
+            f"例题/题目候选：{'；'.join(questions) or '未发现清晰题干'}",
+            f"可考点：{'；'.join(evidence[:5])}",
+            "可能题型：根据本块概念、定义、公式和题干线索生成练习题型，不强制套固定题型。",
+            f"可转 Anki 的问答：正面：本块核心概念是什么？ 背面：{'；'.join(evidence[:3])}",
+            f"原文证据片段：{'；'.join(evidence[:6])}",
+        ]
+    )
+
+
+def local_line_score(line: str) -> int:
+    score = 0
+    if re.search(r"题|答案|计算|证明|分析|解释|比较|选择|填空|question|answer", line, re.I):
+        score += 20
+    if re.search(r"定义|公式|定理|性质|方法|步骤|重点|考点|definition|formula", line, re.I):
+        score += 16
+    if re.search(r"[=+\-*/∑√∫≥≤]|\bP\(|\bE\(|Var\(", line):
+        score += 12
+    if 20 <= len(line) <= 180:
+        score += 8
+    return score
 
 
 def listify(value: object) -> list:

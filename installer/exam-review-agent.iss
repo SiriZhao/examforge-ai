@@ -1,6 +1,6 @@
 #define MyAppName "ExamForge AI"
 #define MyShortcutName "ExamForge AI"
-#define MyAppVersion "0.4.0"
+#define MyAppVersion "0.4.1"
 #define MyAppPublisher "SiriZhao"
 #define MyAppURL "https://github.com/SiriZhao/examforge-ai"
 #define MyAppExeName "ExamForgeAI.exe"
@@ -22,7 +22,7 @@ DefaultDirName={localappdata}\Programs\ExamForge AI
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
-OutputBaseFilename=ExamForgeAISetup-0.4.0
+OutputBaseFilename=ExamForgeAISetup-0.4.1
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

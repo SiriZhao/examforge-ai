@@ -274,22 +274,32 @@ def test_llm_timeout_falls_back(monkeypatch) -> None:
     assert result.llm_error.code == "TIMEOUT"
 
 
-def test_context_too_long_falls_back(monkeypatch) -> None:
+def test_context_too_long_retries_with_compact_synthesis(monkeypatch) -> None:
     report = generate_review_report(MATERIALS)
     monkeypatch.setattr(
         "app.services.llm_providers.openai_compatible.build_review_prompt",
         lambda *args, **kwargs: "太长" * 25000,
     )
+    calls = {"final": 0}
+
+    def fake_post(url, json, headers, timeout):
+        calls["final"] += 1
+        if calls["final"] == 1:
+            return httpx.Response(400, text='{"error":{"message":"context length exceeded"}}')
+        return llm_response_for(report)
+
+    monkeypatch.setattr("app.services.llm_providers.openai_compatible.httpx.post", fake_post)
     result = generate_review_summary(
         MATERIALS,
         report,
         LLMConfig(provider="deepseek", api_key="sk-correct", enabled=True),
     )
 
-    assert result.llm_status == "failed"
-    assert result.fallback_used is True
-    assert result.llm_error
-    assert result.llm_error.code == "CONTEXT_TOO_LONG"
+    assert result.llm_status == "success"
+    assert result.fallback_used is False
+    assert result.llm_error is None
+    assert result.llm_context_strategy == "chunked"
+    assert calls["final"] == 2
 
 
 def test_llm_test_endpoint_success(monkeypatch) -> None:
@@ -348,7 +358,7 @@ def test_short_text_does_not_trigger_compression() -> None:
 
 def test_long_text_triggers_prepare_llm_context() -> None:
     report = generate_review_report(MATERIALS)
-    long_text = ("Chapter 1 Photosynthesis\nKey points: chloroplast, ATP.\n" * 900)
+    long_text = ("Chapter 1 Photosynthesis\nKey points: chloroplast, ATP.\n" * 2500)
     prepared = prepare_llm_context(long_text, report)
 
     assert len(long_text) > MAX_LLM_INPUT_CHARS
@@ -362,7 +372,7 @@ def test_very_long_text_triggers_chunk_summarize(monkeypatch) -> None:
         "Chapter 1 Photosynthesis\n"
         "1. Multiple choice: Which stage produces ATP?\n"
         "Key points: chloroplast, light reaction, Calvin cycle.\n\n"
-        * 1200
+        * 2500
     )
     calls = {"summary": 0, "final": 0}
 
@@ -392,13 +402,13 @@ def test_very_long_text_triggers_chunk_summarize(monkeypatch) -> None:
     assert calls["final"] == 1
 
 
-def test_chunk_summary_failure_falls_back(monkeypatch) -> None:
+def test_chunk_summary_failure_uses_local_chunk_insight(monkeypatch) -> None:
     report = generate_review_report(MATERIALS)
     very_long_text = (
         "Chapter 1 Photosynthesis\n"
         "1. Multiple choice: Which stage produces ATP?\n"
         "Key points: chloroplast, light reaction, Calvin cycle.\n\n"
-        * 1200
+        * 2500
     )
 
     def fake_post(url, json, headers, timeout):
@@ -413,15 +423,15 @@ def test_chunk_summary_failure_falls_back(monkeypatch) -> None:
         LLMConfig(provider="deepseek", api_key="sk-correct", enabled=True),
     )
 
-    assert result.llm_status == "failed"
-    assert result.fallback_used is True
-    assert result.llm_error
-    assert result.llm_error.code == "CONTEXT_TOO_LONG"
+    assert result.llm_status == "success"
+    assert result.fallback_used is False
+    assert result.llm_error is None
+    assert result.llm_context_strategy == "chunked"
 
 
 def test_compressible_long_text_does_not_directly_trigger_context_too_long(monkeypatch) -> None:
     report = generate_review_report(MATERIALS)
-    long_text = ("Chapter 1 Photosynthesis\nKey points: chloroplast, ATP.\n" * 900)
+    long_text = ("Chapter 1 Photosynthesis\nKey points: chloroplast, ATP.\n" * 2200)
 
     def fake_post(url, json, headers, timeout):
         return llm_response_for(report)
@@ -553,7 +563,7 @@ def test_long_document_uses_chunk_insights(monkeypatch) -> None:
         "Chapter Probability Distribution\n"
         "1. Calculate the confidence interval and explain the hypothesis test.\n"
         "Definition: random variable. Formula: E(X), Var(X).\n\n"
-        * 1300
+        * 2300
     )
     prompts: list[str] = []
 

@@ -230,6 +230,8 @@ export default function App() {
         exam_type: examType,
         detail_level: detailLevel,
         output_style: outputStyle,
+        enable_chunked_llm: true,
+        retry_on_context_too_long: true,
         ocr_config: normalizeOcrConfig(ocrConfig),
         llm_config: normalizeLlmConfig(llmConfig),
       });

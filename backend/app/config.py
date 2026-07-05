@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 AppMode = Literal["local_dev", "desktop", "cloud"]
 
 
@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     default_llm_base_url: str = Field(default="https://api.deepseek.com", validation_alias=AliasChoices("DEFAULT_LLM_BASE_URL", "ERA_DEFAULT_LLM_BASE_URL"))
     deepseek_api_key: str = Field(default="", validation_alias=AliasChoices("DEEPSEEK_API_KEY", "ERA_DEEPSEEK_API_KEY"))
     openai_api_key: str = Field(default="", validation_alias=AliasChoices("OPENAI_API_KEY", "ERA_OPENAI_API_KEY"))
+    llm_context_budget_chars: int = Field(default=120000, validation_alias=AliasChoices("LLM_CONTEXT_BUDGET_CHARS", "ERA_LLM_CONTEXT_BUDGET_CHARS"))
+    llm_chunk_chars: int = Field(default=18000, validation_alias=AliasChoices("LLM_CHUNK_CHARS", "ERA_LLM_CHUNK_CHARS"))
+    llm_chunk_overlap_chars: int = Field(default=1200, validation_alias=AliasChoices("LLM_CHUNK_OVERLAP_CHARS", "ERA_LLM_CHUNK_OVERLAP_CHARS"))
+    llm_max_chunks_per_round: int = Field(default=8, validation_alias=AliasChoices("LLM_MAX_CHUNKS_PER_ROUND", "ERA_LLM_MAX_CHUNKS_PER_ROUND"))
+    llm_max_repair_calls: int = Field(default=1, validation_alias=AliasChoices("LLM_MAX_REPAIR_CALLS", "ERA_LLM_MAX_REPAIR_CALLS"))
+    llm_enable_chunk_summary: bool = Field(default=True, validation_alias=AliasChoices("LLM_ENABLE_CHUNK_SUMMARY", "ERA_LLM_ENABLE_CHUNK_SUMMARY"))
+    llm_enable_final_synthesis: bool = Field(default=True, validation_alias=AliasChoices("LLM_ENABLE_FINAL_SYNTHESIS", "ERA_LLM_ENABLE_FINAL_SYNTHESIS"))
 
     model_config = SettingsConfigDict(env_file=".env")
 

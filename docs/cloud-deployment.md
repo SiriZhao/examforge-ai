@@ -16,8 +16,8 @@ ExamForge AI can run as a single Docker web app. The FastAPI backend serves both
 ## Docker
 
 ```bash
-docker build -t examforge-ai:0.4.0 .
-docker run --rm -p 8000:8000 --env-file .env.example examforge-ai:0.4.0
+docker build -t examforge-ai:0.4.1 .
+docker run --rm -p 8000:8000 --env-file .env.example examforge-ai:0.4.1
 ```
 
 Open:
@@ -48,6 +48,13 @@ OPENAI_API_KEY=
 ENABLE_RAPIDOCR=true
 ENABLE_TESSERACT=false
 ENABLE_CLOUD_SAFE_MODE=true
+LLM_CONTEXT_BUDGET_CHARS=120000
+LLM_CHUNK_CHARS=18000
+LLM_CHUNK_OVERLAP_CHARS=1200
+LLM_MAX_CHUNKS_PER_ROUND=8
+LLM_MAX_REPAIR_CALLS=1
+LLM_ENABLE_CHUNK_SUMMARY=true
+LLM_ENABLE_FINAL_SYNTHESIS=true
 ```
 
 Do not put real API keys into git. Configure `DEEPSEEK_API_KEY` or `OPENAI_API_KEY` in the hosting platform secret manager.
@@ -70,8 +77,22 @@ Suggested environment:
 - `DEFAULT_LLM_BASE_URL=https://api.deepseek.com`
 - `DEEPSEEK_API_KEY=<optional secret>`
 - `MAX_UPLOAD_MB=50`
+- `LLM_ENABLE_CHUNK_SUMMARY=true`
+- `LLM_ENABLE_FINAL_SYNTHESIS=true`
 
 `render.yaml` is included as a starting point.
+
+## Long Material Handling
+
+When uploaded materials exceed the configured context budget, ExamForge AI does not immediately fall back to the local safe draft. It automatically:
+
+1. Splits material by file, page, section, question number, and paragraph boundaries.
+2. Builds chunk insights for exam points, definitions, formulas, question patterns, Anki candidates, common mistakes, and evidence snippets.
+3. Preserves high-value content such as past-exam questions, formulas, definitions, code, and teacher-emphasized material.
+4. Runs final synthesis from the evidence pack, local safe draft, chunk insights, and user settings.
+5. Retries with a compact evidence pack if the provider still returns `CONTEXT_TOO_LONG`.
+
+Only after repeated failure does the app return the local safe draft.
 
 ## Railway
 

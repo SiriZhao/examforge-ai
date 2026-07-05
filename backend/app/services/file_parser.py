@@ -9,7 +9,7 @@ from app.services.ocr_service import OCRError, run_ocr_on_image, run_ocr_on_path
 from app.services.runtime_paths import find_poppler_path
 from app.services.subprocess_utils import hide_subprocess_windows
 
-SUPPORTED_PARSE_EXTENSIONS = {".pptx", ".pdf", ".docx", ".md", ".png", ".jpg", ".jpeg"}
+SUPPORTED_PARSE_EXTENSIONS = {".pptx", ".pdf", ".docx", ".md", ".txt", ".png", ".jpg", ".jpeg"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
 PDF_TEXT_MIN_CHARS = 20
 
@@ -43,6 +43,8 @@ def parse_file(
             pages = parse_pptx(path)
         elif suffix == ".md":
             pages = parse_markdown(path)
+        elif suffix == ".txt":
+            pages = parse_text(path)
         elif suffix == ".pdf":
             pages, warnings, cache_used = parse_pdf(path, config, progress_callback)
         else:
@@ -107,6 +109,14 @@ def parse_pptx(path: Path) -> list[ParsedPage]:
 
 def parse_markdown(path: Path) -> list[ParsedPage]:
     text = path.read_text(encoding="utf-8")
+    return [ParsedPage(page_number=1, text=text, source="text_extract")]
+
+
+def parse_text(path: Path) -> list[ParsedPage]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        text = path.read_text(encoding="utf-8", errors="ignore")
     return [ParsedPage(page_number=1, text=text, source="text_extract")]
 
 

@@ -278,6 +278,8 @@ def build_generation_summary(parsed_files, report, llm_result) -> GenerationSumm
         notes.append("已检测到文字版 PDF 或可直接提取文本的材料，跳过不必要 OCR。")
     if llm_result.fallback_used:
         notes.append("AI 深度整理未完全成功，已保留本地安全底稿。")
+    if llm_result.llm_context_strategy == "chunked" and not llm_result.fallback_used:
+        notes.append("AI 深度整理已完成：系统已自动使用分块整理处理长材料。")
     return GenerationSummary(
         files_processed=len(parsed_files),
         pages_total=len(pages),

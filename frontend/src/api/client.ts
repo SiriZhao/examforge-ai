@@ -1,8 +1,7 @@
 import axios from "axios";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (window.location.port === "5173" ? "http://127.0.0.1:8000" : `${window.location.origin}/api`);
+  import.meta.env.VITE_API_BASE_URL || `${window.location.origin}/api`;
 
 const api = axios.create({ baseURL: API_BASE_URL });
 
@@ -291,6 +290,8 @@ export type GenerateReviewParams = {
   output_style?: OutputStyle;
   ocr_config: OCRConfig;
   llm_config: LLMConfig;
+  enable_chunked_llm?: boolean;
+  retry_on_context_too_long?: boolean;
 };
 
 export async function uploadFiles(files: File[]): Promise<UploadResponse> {

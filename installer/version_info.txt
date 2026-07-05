@@ -16,12 +16,12 @@ VSVersionInfo(
         [
           StringStruct('CompanyName', 'SiriZhao'),
           StringStruct('FileDescription', 'ExamForge AI review pack generator'),
-          StringStruct('FileVersion', '0.4.0'),
+          StringStruct('FileVersion', '0.4.1'),
           StringStruct('InternalName', 'ExamForgeAI'),
           StringStruct('LegalCopyright', 'Copyright 2026 SiriZhao'),
           StringStruct('OriginalFilename', 'ExamForgeAI.exe'),
           StringStruct('ProductName', 'ExamForge AI'),
-          StringStruct('ProductVersion', '0.4.0'),
+          StringStruct('ProductVersion', '0.4.1'),
           StringStruct('Comments', 'Cloud and desktop exam review pack generator'),
         ],
       )

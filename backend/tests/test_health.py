@@ -1,4 +1,4 @@
-﻿from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
 from app.main import app
 
@@ -10,7 +10,7 @@ def test_health_check() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["version"] == "0.4.0"
+    assert body["version"] == "0.4.1"
     assert body["mode"] in {"local_dev", "desktop", "cloud"}
     assert "llm_server_configured" in body
     assert "llm_provider_configured" in body

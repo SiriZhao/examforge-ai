@@ -168,6 +168,8 @@ class GenerateReviewRequest(BaseModel):
     material_types: dict[str, str] = Field(default_factory=dict)
     ocr_config: OCRConfig = Field(default_factory=OCRConfig)
     llm_config: LLMConfig = Field(default_factory=LLMConfig)
+    enable_chunked_llm: bool = True
+    retry_on_context_too_long: bool = True
 
 
 class ExamQuestion(BaseModel):

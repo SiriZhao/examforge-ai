@@ -28,3 +28,17 @@ services:
         value: "false"
       - key: ENABLE_CLOUD_SAFE_MODE
         value: "true"
+      - key: LLM_CONTEXT_BUDGET_CHARS
+        value: "120000"
+      - key: LLM_CHUNK_CHARS
+        value: "18000"
+      - key: LLM_CHUNK_OVERLAP_CHARS
+        value: "1200"
+      - key: LLM_MAX_CHUNKS_PER_ROUND
+        value: "8"
+      - key: LLM_MAX_REPAIR_CALLS
+        value: "1"
+      - key: LLM_ENABLE_CHUNK_SUMMARY
+        value: "true"
+      - key: LLM_ENABLE_FINAL_SYNTHESIS
+        value: "true"

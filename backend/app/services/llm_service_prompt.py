@@ -2,12 +2,14 @@
 import re
 from dataclasses import dataclass
 
+from app.config import settings
 from app.schemas.review import DetailLevel, ExamType, OutputStyle, ReviewReport, StudyGoal
 
-MAX_LLM_INPUT_CHARS = 42000
-MAX_CHUNK_CHARS = 12000
-MAX_CHUNKS = 12
-CONTEXT_TOO_LONG_MESSAGE = "资料过长，大模型深度整理未完成。系统已保留本地安全底稿。建议分批上传课件、教材和往年题后分别生成。"
+MAX_LLM_INPUT_CHARS = settings.llm_context_budget_chars
+MAX_CHUNK_CHARS = settings.llm_chunk_chars
+MAX_CHUNK_OVERLAP_CHARS = settings.llm_chunk_overlap_chars
+MAX_CHUNKS = settings.llm_max_chunks_per_round
+CONTEXT_TOO_LONG_MESSAGE = "资料较长，系统会自动切换为分块整理模式，优先保留往年题题干、公式、定义、题型线索和关键上下文后再合成最终报告。"
 
 
 @dataclass
@@ -72,7 +74,7 @@ def build_review_prompt(
 输出风格：{output_style}
 风格策略：{style_instruction}
 
-v0.4.0 输出要求：
+v0.4.1 输出要求：
 - 报告必须体现复习目标和考试类型差异。
 - question_types 需要包含 name、confidence、evidence、evidence_sources、features、related_topics、answer_strategy、sample_questions、practice_suggestions、is_from_past_exam。
 - mock_exam.questions 每题需要 question_type/type、difficulty、question、options、answer、explanation、related_topic、source_hint、source_basis。
@@ -177,6 +179,97 @@ chunk_insights：
 本地安全底稿 JSON：
 {safe_draft.model_dump_json(ensure_ascii=False)}
 """.strip()
+
+
+def build_compact_review_prompt(
+    evidence_pack: dict,
+    safe_draft: ReviewReport,
+    chunk_insights: list[str],
+    *,
+    study_goal: StudyGoal = "balanced",
+    exam_type: ExamType = "unknown",
+    detail_level: DetailLevel = "detailed",
+    output_style: OutputStyle = "teaching_assistant",
+    budget: int | None = None,
+) -> str:
+    target_budget = budget or max(36000, int(MAX_LLM_INPUT_CHARS * 0.65))
+    evidence_limit = max(8000, int(target_budget * 0.28))
+    insight_limit = max(12000, int(target_budget * 0.42))
+    draft_limit = max(6000, int(target_budget * 0.2))
+    compact_pack = compact_evidence_pack(evidence_pack)
+    evidence_json = json.dumps(compact_pack, ensure_ascii=False)[:evidence_limit]
+    insights_text = "\n\n".join(
+        f"[chunk_insight {index + 1}]\n{item[:2500]}"
+        for index, item in enumerate(chunk_insights[: settings.llm_max_chunks_per_round])
+    )[:insight_limit]
+    return f"""
+你是资深课程助教和期末复习教练。上一轮输入接近或超过模型上下文限制，现在请使用压缩后的证据完成最终合成，不要退回普通摘要。
+
+用户复习目标：{study_goal}
+考试类型：{exam_type}
+生成详细度：{detail_level}
+输出风格：{output_style}
+
+合成原则：
+- 优先保留往年题题干、题型线索、定义、公式、代码、例题和易错点。
+- 自主命名专题，自主归纳题型，不套固定题型库。
+- 如果材料不足，明确说明不足并生成保守可用练习；不要胡编。
+- 优先输出合法 JSON；若不稳定，可输出完整 Markdown 报告。
+- 最终报告必须包含复习导览、专题结构、高频考点、题型分析、模拟题与答案、Anki 卡片、冲刺计划。
+
+压缩 Evidence Pack：
+{evidence_json}
+
+chunk_insights：
+{insights_text or "短材料未进入分块理解。"}
+
+本地安全底稿摘录：
+{safe_draft.model_dump_json(ensure_ascii=False)[:draft_limit]}
+""".strip()
+
+
+def compact_evidence_pack(evidence_pack: dict) -> dict:
+    files = []
+    for item in evidence_pack.get("files", [])[:8]:
+        files.append(
+            {
+                "filename": item.get("filename"),
+                "file_type_guess": item.get("file_type_guess"),
+                "text_length": item.get("text_length"),
+                "important_fragments": item.get("important_fragments", [])[:8],
+                "possible_questions": item.get("possible_questions", [])[:10],
+                "possible_formulas": item.get("possible_formulas", [])[:8],
+                "possible_definitions": item.get("possible_definitions", [])[:8],
+                "possible_keywords": item.get("possible_keywords", [])[:12],
+            }
+        )
+    signals = evidence_pack.get("global_signals", {})
+    chunks = []
+    for chunk in evidence_pack.get("chunks", [])[: settings.llm_max_chunks_per_round]:
+        chunks.append(
+            {
+                "chunk_id": chunk.get("chunk_id"),
+                "source_file": chunk.get("source_file"),
+                "local_summary": chunk.get("local_summary"),
+                "key_terms": chunk.get("key_terms", [])[:10],
+                "possible_exam_value": chunk.get("possible_exam_value"),
+                "cleaned_excerpt": str(chunk.get("cleaned_excerpt", ""))[:900],
+            }
+        )
+    return {
+        "course_name": evidence_pack.get("course_name"),
+        "files": files,
+        "global_signals": {
+            "frequent_terms": signals.get("frequent_terms", [])[:30],
+            "possible_titles": signals.get("possible_titles", [])[:20],
+            "possible_exam_topics": signals.get("possible_exam_topics", [])[:24],
+            "possible_question_clusters": signals.get("possible_question_clusters", [])[:12],
+            "detected_exam_materials": signals.get("detected_exam_materials", [])[:8],
+            "safe_draft_review_order": signals.get("safe_draft_review_order", [])[:10],
+            "safe_draft_high_frequency_topics": signals.get("safe_draft_high_frequency_topics", [])[:12],
+        },
+        "chunks": chunks,
+    }
 
 
 def build_chunk_summary_prompt(chunk: str, chunk_index: int, total_chunks: int) -> str:
@@ -375,7 +468,8 @@ def split_material_chunks(text: str) -> list[str]:
                 chunks.append("\n\n".join(current))
                 current = []
                 current_len = 0
-            for start in range(0, len(paragraph), MAX_CHUNK_CHARS):
+            step = max(1, MAX_CHUNK_CHARS - MAX_CHUNK_OVERLAP_CHARS)
+            for start in range(0, len(paragraph), step):
                 chunks.append(paragraph[start : start + MAX_CHUNK_CHARS])
             continue
 

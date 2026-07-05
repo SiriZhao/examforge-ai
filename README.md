@@ -1,103 +1,78 @@
 # ExamForge AI
 
-面向大学生期末复习的 AI 复习资料生成器。上传课件、教材、笔记、扫描试卷和往年题，生成可导出的复习资料包、模拟卷、Anki 卡片和考前冲刺计划。
+ExamForge AI 是面向大学生期末复习场景的资料包生成器。用户上传课件、教材、笔记、扫描试卷、往年题或图片后，系统会完成文本解析、OCR 清洗、多文件证据整合、题型反推、AI 深度整理和多格式导出，生成可直接复习、背诵、刷题和导入 Anki 的资料包。
 
-ExamForge AI turns messy course materials into structured exam-ready study packs with OCR cleanup, evidence extraction, optional LLM enhancement, and Markdown / Word / PDF / Anki CSV export.
+English summary: ExamForge AI turns scattered course materials into exam-ready study packs with OCR cleanup, evidence extraction, optional LLM enhancement, mock exams, Anki cards, and Markdown / Word / PDF / Anki CSV export.
 
-Author: [SiriZhao](https://github.com/SiriZhao)  
-Repository: [SiriZhao/examforge-ai](https://github.com/SiriZhao/examforge-ai)
+作者：[SiriZhao](https://github.com/SiriZhao)  
+仓库：[SiriZhao/examforge-ai](https://github.com/SiriZhao/examforge-ai)  
+当前版本：v0.4.1  
+许可证：MIT License
 
-![License](https://img.shields.io/badge/license-MIT-green)
-![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688)
-![React](https://img.shields.io/badge/React-19-61dafb)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6)
-![Docker](https://img.shields.io/badge/Docker-supported-2496ed)
-![Windows](https://img.shields.io/badge/Windows-supported-0078d4)
-
-## 为什么做这个项目
-
-期末复习材料往往不是一个干净的知识库，而是一堆分散的 PPT、PDF、教材截图、课堂笔记、扫描试卷和往年题。普通大模型聊天可以回答问题，但用户仍然需要手动整理 OCR、提炼重点、归纳题型、排版导出和制作 Anki。
-
-ExamForge AI 的目标不是替代学习，而是提供一条完整的期末复习资料生产线：
-
-1. 解析多种课程资料。
-2. 清洗 OCR 和文本噪声。
-3. 构建多文件证据包。
-4. 根据往年题和题干线索反推题型。
-5. 让 AI 深度整理章节、考点、模拟题和 Anki。
-6. 进行质量校验与本地安全底稿兜底。
-7. 导出 Markdown、Word、PDF 和 Anki CSV。
-
-## 核心功能
+## 核心能力
 
 - 支持 PDF、PPTX、DOCX、Markdown、TXT、PNG、JPG、JPEG。
-- 支持文字版 PDF 直接提取，扫描件按需 OCR。
-- 支持 OCR 缓存、文本清洗、公式碎片过滤和坏标题过滤。
-- 支持多文件证据整合，区分课件、笔记、教材、往年题和扫描材料。
-- 支持复习目标：1 天速通、3 天冲刺、7 天系统复习、重点背诵、重点刷题、Anki 整理、根据往年题抓重点、平衡模式。
-- 支持考试类型：闭卷、开卷、机考、编程、实验、论文/论述、口试/展示、课程论文/报告。
-- 支持题型反推：根据 OCR、往年题、真实题干和材料结构自动归纳题型。
-- 支持 AI 深度整理：DeepSeek 或 OpenAI-compatible 模型。
-- 支持本地整理模式：无需 API Key，也能生成可用安全底稿。
-- 支持重新优化报告：无需重新 OCR，可按背诵、刷题、Anki、简洁、详细等方向优化。
-- 支持 Markdown、DOCX、PDF 和 Anki CSV 导出。
-- 支持云端 Web App 和 Windows 桌面版双形态发布。
+- 文字版 PDF 自动提取文本，扫描页按需 OCR，避免无意义逐页 OCR。
+- 支持 OCR 缓存、噪声清洗、公式片段保护、坏标题过滤。
+- 支持复习目标：1 天速通、3 天冲刺、7 天系统复习、重点背诵、重点刷题、整理 Anki、根据往年题抓重点、平衡模式。
+- 支持考试类型：不确定、闭卷、开卷、机考、编程、实验、论文/论述、口试/展示、课程论文/报告。
+- 支持详细度和输出风格：简洁、标准、详细、超详细；考前冲刺、学霸笔记、助教讲义、刷题训练、Anki 制卡。
+- 支持 DeepSeek / OpenAI-compatible 模型增强，也支持无 API Key 的本地安全底稿模式。
+- 支持长材料自动分块：chunk insight、证据包压缩、最终合成和 CONTEXT_TOO_LONG 自动重试。
+- 支持 Markdown、DOCX、PDF、Anki CSV 下载。
+- 同时支持云端 Web App 和 Windows 桌面版。
 
-## 与直接使用 ChatGPT / NotebookLM 的区别
+## 为什么不直接把资料发给 ChatGPT / NotebookLM？
+
+ExamForge AI 不是普通聊天界面，而是一条期末复习资料生产线：
 
 | 能力 | ExamForge AI | 普通大模型聊天 |
 | --- | --- | --- |
-| OCR 清洗 | 自动处理 | 依赖上传质量 |
-| 多文件证据整合 | 内置 | 需要手动提示 |
-| 往年题题型反推 | 内置 | 不稳定 |
-| 复习目标和考试类型 | 内置 | 需要反复提示 |
-| 模拟卷与答案解析 | 自动生成并校验 | 需要手动整理 |
-| Anki CSV 导出 | 支持 | 通常需要手动制作 |
-| Word / PDF / Markdown 导出 | 支持 | 需要复制排版 |
-| 本地安全底稿 | 支持 | 无 |
-| 云端与桌面双模式 | 支持 | 无 |
+| OCR 清洗 | 自动处理扫描页、噪声、缓存 | 依赖用户手动整理 |
+| 多文件证据整合 | 自动合并课件、笔记、教材、往年题 | 需要反复提示 |
+| 往年题题型反推 | 根据真实题干和题号结构归纳题型 | 不稳定 |
+| 长材料处理 | 分块理解、chunk insight、最终合成 | 容易超上下文 |
+| 复习目标定制 | 内置目标和考试类型 | 需要用户自己设计 prompt |
+| 质量守门 | 检查题目、答案、Anki、乱码和导出字段 | 无内置校验 |
+| 导出 | Markdown / Word / PDF / Anki CSV | 通常要复制排版 |
+| 本地兜底 | 无 Key 也可生成安全底稿 | 无 |
+| 双形态发布 | 云端网页 + Windows 桌面版 | 不适用 |
 
-## 快速开始
+## 在线网页端使用教程
 
-### 方式一：云端 Web App
+部署者上线后，用户打开部署链接即可使用。若当前还没有公开链接，可按下方 Docker / Render / Railway / Fly.io 教程自行部署。
 
-如果已经有部署好的实例，打开部署链接即可使用。
+网页端流程：
 
-自行部署推荐使用 Docker：
+1. 打开部署链接。
+2. 输入课程名或考试名，例如“概率论”“Python”“植物学下”。
+3. 上传课件、教材、笔记、往年题、扫描 PDF 或图片。
+4. 选择复习目标、考试类型、OCR 模式、详细度和输出风格。
+5. 选择本地整理或 AI 深度整理。
+6. 如果部署者没有配置服务端 Key，可在网页端填写自己的 DeepSeek / OpenAI-compatible API Key。
+7. 点击生成。
+8. 在线预览复习资料、题型分析、模拟卷、Anki 卡片和生成过程摘要。
+9. 下载 Markdown、Word、PDF 或 Anki CSV。
 
-```bash
-docker build -t examforge-ai .
-docker run --rm -p 8000:8000 --env-file .env.example examforge-ai
-```
+如果不填写 API Key，系统仍会使用本地安全底稿模式生成可用资料。AI 深度整理通常能显著提升章节命名、题型归纳、模拟题和 Anki 卡片质量。
 
-然后打开：
+## Windows 桌面版使用教程
 
-```text
-http://127.0.0.1:8000
-```
-
-健康检查：
-
-```text
-http://127.0.0.1:8000/api/health
-```
-
-### 方式二：Windows 桌面版
-
-从 GitHub Releases 下载并安装：
+从 GitHub Releases 下载：
 
 ```text
-ExamForgeAISetup-0.4.0.exe
+ExamForgeAISetup-0.4.1.exe
 ```
 
-桌面版更适合处理隐私敏感资料或离线使用。运行时数据默认存储在：
+安装后运行 ExamForge AI。桌面版适合处理更隐私的资料，默认数据目录为：
 
 ```text
 %LOCALAPPDATA%\ExamForgeAI
 ```
 
-### 方式三：本地开发
+桌面版仍可配置 DeepSeek / OpenAI-compatible API Key；不配置 Key 时使用本地安全底稿。
+
+## 本地开发
 
 ```bash
 git clone https://github.com/SiriZhao/examforge-ai.git
@@ -110,7 +85,7 @@ cd examforge-ai
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
 ```
 
@@ -122,104 +97,184 @@ npm install
 npm run dev
 ```
 
-默认开发地址：
+前端开发地址通常是：
 
 ```text
 http://127.0.0.1:5173
 ```
 
-## AI 与 API Key 配置
+本地开发如需指定后端地址，可在前端环境变量中设置：
 
-- 本地整理模式无需 API Key。
-- AI 深度整理建议配置 DeepSeek 或 OpenAI-compatible API。
-- DeepSeek 示例：
-  - Provider: `deepseek`
-  - Base URL: `https://api.deepseek.com`
-  - Model: `deepseek-v4-flash`，或替换为你实际可用的模型。
-- 不要把真实 API Key 提交到 Git。
-- 云端部署可通过平台 Secret 配置服务端默认 Key，也可以让用户在浏览器中输入自己的 Key。
-- 用户自带 Key 应通过 HTTPS 传输；服务端默认 Key 不会返回给前端。
+```text
+VITE_API_BASE_URL=http://127.0.0.1:8000/api
+```
 
-## 云端部署
+未设置时，生产构建会默认使用同源 `/api`。
 
-项目支持 Docker 单体部署：FastAPI 同时提供 API、上传处理、生成任务、下载接口和前端静态页面。
+## Docker 部署
 
-常用平台：
+```bash
+docker build -t examforge-ai .
+docker run --rm -p 8000:8000 --env-file .env.example examforge-ai
+```
 
-- Docker
-- Render
-- Railway
-- Fly.io
+打开：
 
-详细说明见 [docs/cloud-deployment.md](docs/cloud-deployment.md) 和 [docs/deployment.md](docs/deployment.md)。
+```text
+http://127.0.0.1:8000
+http://127.0.0.1:8000/api/health
+```
 
-关键环境变量示例见 [.env.example](.env.example)。
+Docker 镜像会构建前端并由 FastAPI 托管静态页面，云端平台通过 `PORT` 环境变量指定端口。
+
+## Render 部署
+
+1. 打开 [Render](https://render.com) 并登录。
+2. 点击 New +，选择 Web Service。
+3. 连接 GitHub 仓库 `SiriZhao/examforge-ai`。
+4. Environment 选择 Docker。
+5. Branch 选择 `main`。
+6. Root Directory 留空。
+7. Health Check Path 填 `/api/health`。
+8. 添加环境变量：
+
+```text
+APP_MODE=cloud
+PORT=10000
+DEFAULT_LLM_PROVIDER=deepseek
+DEFAULT_LLM_MODEL=deepseek-v4-flash
+DEFAULT_LLM_BASE_URL=https://api.deepseek.com
+MAX_UPLOAD_MB=50
+MAX_FILES_PER_REQUEST=10
+JOB_TIMEOUT_SECONDS=600
+TEMP_FILE_TTL_HOURS=24
+ENABLE_RAPIDOCR=true
+ENABLE_TESSERACT=false
+ENABLE_CLOUD_SAFE_MODE=true
+LLM_CONTEXT_BUDGET_CHARS=120000
+LLM_CHUNK_CHARS=18000
+LLM_CHUNK_OVERLAP_CHARS=1200
+LLM_MAX_CHUNKS_PER_ROUND=8
+LLM_MAX_REPAIR_CALLS=1
+LLM_ENABLE_CHUNK_SUMMARY=true
+LLM_ENABLE_FINAL_SYNTHESIS=true
+```
+
+如需让用户免填 Key，可额外配置：
+
+```text
+DEEPSEEK_API_KEY=你的服务端 Key
+```
+
+不要把真实 Key 写入代码或提交到 Git。
+
+## Railway / Fly.io 部署
+
+Railway 通常会识别根目录 Dockerfile 并构建服务；设置和 Render 类似的环境变量即可。
+
+Fly.io 可使用：
+
+```bash
+fly launch
+fly deploy
+```
+
+生产环境请配置 HTTPS、访问控制、上传限制、日志保护和成本监控。
+
+## API Key 说明
+
+ExamForge AI 支持两种 AI Key 模式：
+
+1. 服务端默认 Key：部署者通过环境变量配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`。后端使用该 Key，但不会返回给前端。
+2. 用户自带 Key：用户在网页端输入自己的 Key。后端仅用于当次请求，默认不写入服务器文件；前端若选择保存，只应保存在当前浏览器 localStorage，并提示用户。
+
+生产环境必须使用 HTTPS 传输用户自带 Key。
+
+## 长材料与 CONTEXT_TOO_LONG
+
+v0.4.1 起，长材料不再轻易直接退回本地安全底稿。系统会：
+
+1. 按文件、页面、章节、题号和自然段智能分块。
+2. 为每个 chunk 生成 chunk insight，保留考点、定义、公式、题型线索、往年题题干、Anki 候选和证据片段。
+3. 将 evidence pack、local_safe_draft、chunk insights、题干候选和用户设置合成为最终 AI 复习包。
+4. 如果模型返回 CONTEXT_TOO_LONG，自动缩小证据包并重试最终合成。
+5. 只有多次失败后，才回退本地安全底稿。
+
+## 上传限制
+
+默认允许：
+
+```text
+pdf, pptx, docx, md, txt, png, jpg, jpeg
+```
+
+默认拒绝：
+
+```text
+exe, bat, ps1, sh, js, html, php, py, dll, msi, zip, rar, 7z
+```
+
+默认上传配置可通过环境变量调整：
+
+```text
+MAX_UPLOAD_MB=50
+MAX_FILES_PER_REQUEST=10
+JOB_TIMEOUT_SECONDS=600
+TEMP_FILE_TTL_HOURS=24
+```
 
 ## 项目结构
 
 ```text
 examforge-ai/
-├── backend/              # FastAPI 后端、文档解析、OCR、LLM、导出
-├── frontend/             # React + TypeScript 前端
-├── docs/                 # 部署、隐私、安全、免责声明和打包文档
-├── examples/             # 可公开的虚构示例材料
-├── scripts/              # 测试、构建和打包脚本
-├── installer/            # Windows 安装包配置和图标
-├── .github/              # Issue 模板和 GitHub Actions
-├── Dockerfile            # 云端 Web App 镜像构建
-├── docker-compose.yml    # 本地 Docker 运行示例
-├── render.yaml           # Render 部署示例
-├── fly.toml              # Fly.io 部署示例
-├── ExamForgeAI.spec      # PyInstaller 桌面版打包配置
-├── desktop_main.py       # Windows 桌面版启动入口
-├── start.bat             # 本地开发启动脚本
-├── README.md
-└── LICENSE
+├─ backend/              FastAPI 后端、解析、OCR、LLM、导出
+├─ frontend/             React + TypeScript 前端
+├─ docs/                 部署、用户指南、安全、隐私、免责声明
+├─ examples/             可公开的虚构示例材料
+├─ scripts/              构建、清理、Windows 打包脚本
+├─ installer/            Windows 安装包配置
+├─ .github/              GitHub Actions 与模板
+├─ Dockerfile            云端 Web App 镜像构建
+├─ docker-compose.yml    本地 Docker 示例
+├─ render.yaml           Render 示例配置
+├─ fly.toml              Fly.io 示例配置
+├─ ExamForgeAI.spec      PyInstaller 打包配置
+├─ desktop_main.py       Windows 桌面版入口
+├─ start.bat             本地启动脚本
+├─ README.md
+└─ LICENSE
 ```
-
-## 示例材料
-
-`examples/` 目录只包含虚构 demo，不包含真实课程资料、真实试卷或个人文件。可以用这些文件做本地冒烟测试：
-
-- [examples/demo_course_material.md](examples/demo_course_material.md)
-- [examples/demo_past_exam.md](examples/demo_past_exam.md)
-- [examples/demo_output.md](examples/demo_output.md)
 
 ## 隐私与安全
 
-- 本地桌面版更适合处理隐私敏感资料。
 - 云端部署时，上传文件会由服务器处理。
-- 使用 LLM 时，材料证据可能会发送给对应模型服务商。
-- 用户应确保自己有权处理、上传和分析相关资料。
-- 不要提交 `.env`、真实 API Key、真实课程资料、真实上传文件或真实生成报告。
-- 公共云端部署建议增加 HTTPS、访问控制、限流、监控、成本控制和滥用防护。
+- 使用 AI 深度整理时，材料证据可能会发送给对应 LLM 服务商。
+- 用户自带 Key 默认不应存储在服务器。
+- 本地桌面版更适合处理隐私敏感资料。
+- 请勿上传无权处理的课程资料、考试资料或包含个人隐私的文件。
+- 公共部署建议增加 HTTPS、登录、限流、任务队列、成本监控和滥用防护。
 
-更多信息：
+更多文档：
 
-- [docs/privacy.md](docs/privacy.md)
+- [docs/user-guide.md](docs/user-guide.md)
+- [docs/cloud-deployment.md](docs/cloud-deployment.md)
+- [docs/windows-desktop.md](docs/windows-desktop.md)
 - [docs/security.md](docs/security.md)
+- [docs/privacy.md](docs/privacy.md)
 - [docs/disclaimer.md](docs/disclaimer.md)
-- [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)
+- [docs/release-checklist.md](docs/release-checklist.md)
 
 ## 免责声明
 
-- 生成内容仅供学习和复习辅助。
-- 不保证押题准确，不保证生成内容完全正确。
+- 本项目生成内容仅供学习和复习辅助。
+- 不保证押题准确，也不保证生成内容完全正确。
 - 用户应自行核对课程材料、教材和教师要求。
-- 不鼓励作弊、泄露考试内容或违反学校规定。
+- 本项目不鼓励作弊、泄露考试内容或违反学校规定。
 - 上传和使用资料前，请确认拥有合法权限。
 
-## Roadmap
+## 依赖与商用提示
 
-- 更稳定的题型反推和往年题加权。
-- 更强的自测模式和错题本。
-- 更好的在线 Demo、截图和演示数据。
-- 云端任务队列、多用户隔离和访问限流。
-- 更细粒度的导出模板和 Anki 制卡策略。
-
-## English Summary
-
-ExamForge AI is an open-source exam preparation assistant that turns scattered course materials into structured study packs. It supports OCR cleanup, multi-file evidence integration, past-exam question type inference, mock exams, Anki CSV export, quality checks, and optional LLM enhancement. It can run as a cloud web app or as a Windows desktop app.
+本项目使用 FastAPI、React、PyInstaller、文档解析、OCR 和 LLM API 相关依赖。项目代码采用 MIT License；商用部署前，请自行审查第三方依赖许可证、LLM 服务条款、学校/机构规定和当地法律法规。
 
 ## License
 

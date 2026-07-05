@@ -192,6 +192,7 @@ function ReportSourceNotice({
   const source = result.report_source ?? "rule_based";
   const status = result.llm_status ?? "disabled";
   const chunked = result.llm_context_strategy === "chunked";
+  const contextTooLong = result.llm_error?.code === "CONTEXT_TOO_LONG";
 
   if (source === "local_safe_draft_with_ai_outline" && visible) {
     return (
@@ -233,7 +234,9 @@ function ReportSourceNotice({
       <div className="llm-fallback-box">
         <strong>当前报告来源：本地安全底稿</strong>
         <p>
-          {qualityFailed
+          {contextTooLong
+            ? "AI 深度整理遇到上下文过长，系统已尝试分块整理和压缩重试；当前已保留本地安全底稿。你可以自动分块后重试、降低详细度，或只保留往年题线索后再次生成。"
+            : qualityFailed
             ? "系统检测到 AI 输出存在内容过短、缺少题目、缺少答案、乱码或空泛等问题，已自动回退到更稳定的本地安全底稿。"
             : "大模型增强未成功，系统已保留本地生成的可用复习资料。建议检查大模型配置后重新生成，以获得更高质量结果。"}
         </p>
@@ -249,6 +252,9 @@ function ReportSourceNotice({
         <div className="quick-actions">
           <button type="button" className="secondary accent" onClick={onOpenLLMSettings}>去配置大模型</button>
           <button type="button" className="secondary" onClick={onTestLLM}>测试连接</button>
+          {contextTooLong && <button type="button" className="secondary" onClick={onRegenerate}>自动分块后重试</button>}
+          {contextTooLong && <button type="button" className="secondary" onClick={onRegenerate}>降低详细度后重试</button>}
+          {contextTooLong && <button type="button" className="secondary" onClick={onRegenerate}>仅使用往年题重试</button>}
           <button type="button" className="secondary" onClick={onDismiss}>继续查看安全底稿</button>
           <button type="button" className="secondary" onClick={onRegenerate}>重新生成</button>
         </div>
