@@ -5,8 +5,8 @@ COPY frontend/package*.json ./
 RUN npm install
 COPY frontend ./
 ENV VITE_API_BASE_URL=
-ENV VITE_APP_NAME=CampusForge
-ENV VITE_APP_VERSION=0.5.0
+ENV VITE_APP_NAME="Campus AI Workspace"
+ENV VITE_APP_VERSION=0.5.1
 RUN npm run build
 
 FROM python:3.12-slim AS runtime
@@ -14,8 +14,8 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV APP_MODE=cloud
-ENV APP_NAME=CampusForge
-ENV APP_VERSION=0.5.0
+ENV APP_NAME="Campus AI Workspace"
+ENV APP_VERSION=0.5.1
 ENV PORT=8000
 ENV STORAGE_DIR=/data
 ENV UPLOAD_DIR=uploads
@@ -43,7 +43,12 @@ COPY backend/app ./app
 COPY --from=frontend-build /workspace/frontend/dist ./app/static
 
 RUN mkdir -p /data/uploads /data/outputs /data/cache/ocr
+RUN useradd --create-home --uid 10001 campus && chown -R campus:campus /app /data
+
+USER campus
 
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
 
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

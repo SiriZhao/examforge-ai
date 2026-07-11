@@ -41,7 +41,7 @@ Expected outputs:
 
 ```text
 dist/CampusForge.exe
-dist/installer/CampusForgeSetup-0.5.0.exe
+dist/installer/CampusForgeSetup-0.5.1.exe
 ```
 
 If Inno Setup is not installed, the script still produces `dist/CampusForge.exe`.
@@ -79,14 +79,14 @@ Recommended release checklist:
    ```
 
 2. Smoke test `dist/CampusForge.exe` on the build machine.
-3. Test the installer `dist/installer/CampusForgeSetup-0.5.0.exe`.
+3. Test the installer `dist/installer/CampusForgeSetup-0.5.1.exe`.
 4. Ideally test on a clean Windows VM without Python and Node.js installed.
-5. Create a GitHub Release named `v0.5.0`.
+5. Create a GitHub Release named `v0.5.1`.
 6. Upload:
 
    ```text
    dist/CampusForge.exe
-   dist/installer/CampusForgeSetup-0.5.0.exe
+   dist/installer/CampusForgeSetup-0.5.1.exe
    ```
 
 7. Include release notes:
@@ -156,5 +156,3 @@ Uninstalling CampusForge keeps user data by design. Delete this folder manually 
 ```text
 %LOCALAPPDATA%\CampusForge
 ```
-
-

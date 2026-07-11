@@ -18,7 +18,7 @@ The script should:
 4. Run PyInstaller with `CampusForge.spec`.
 5. Include `frontend/dist` in the packaged executable.
 6. Produce `dist/CampusForge.exe`.
-7. Produce `dist/installer/CampusForgeSetup-0.5.0.exe` when Inno Setup is available.
+7. Produce `dist/installer/CampusForgeSetup-0.5.1.exe` when Inno Setup is available.
 
 ## Verify
 

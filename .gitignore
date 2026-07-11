@@ -5,6 +5,9 @@
 
 # Logs
 *.log
+*.db
+*.sqlite
+*.sqlite3
 *.tmp
 *.bak
 

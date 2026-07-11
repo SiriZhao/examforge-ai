@@ -1,10 +1,12 @@
 {
-  "name": "campusforge",
-  "version": "0.5.0",
+  "name": "campus-ai-workspace",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run"
@@ -26,4 +28,3 @@
     "vitest": "^4.1.8"
   }
 }
-

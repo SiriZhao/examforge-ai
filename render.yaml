@@ -1,48 +1,28 @@
 services:
   - type: web
-    name: campusforge
+    name: campus-ai-workspace
     env: docker
     plan: starter
     dockerfilePath: ./Dockerfile
-    autoDeploy: true
+    healthCheckPath: /api/health
+    disk:
+      name: campus-workspace-data
+      mountPath: /data
+      sizeGB: 5
     envVars:
       - key: APP_MODE
         value: cloud
       - key: APP_NAME
-        value: CampusForge
+        value: Campus AI Workspace
       - key: APP_VERSION
-        value: 0.5.0
-      - key: MAX_UPLOAD_MB
-        value: "50"
-      - key: MAX_FILES_PER_REQUEST
-        value: "10"
-      - key: JOB_TIMEOUT_SECONDS
-        value: "600"
-      - key: TEMP_FILE_TTL_HOURS
-        value: "24"
-      - key: DEFAULT_LLM_PROVIDER
-        value: deepseek
-      - key: DEFAULT_LLM_MODEL
-        value: deepseek-v4-flash
-      - key: DEFAULT_LLM_BASE_URL
-        value: https://api.deepseek.com
+        value: 0.5.1
+      - key: DATABASE_URL
+        value: sqlite:////data/workspace.db
+      - key: STORAGE_DIR
+        value: /data
+      - key: ENABLE_PYTHON_TOOL
+        value: "false"
       - key: ENABLE_RAPIDOCR
         value: "true"
       - key: ENABLE_TESSERACT
         value: "false"
-      - key: ENABLE_CLOUD_SAFE_MODE
-        value: "true"
-      - key: LLM_CONTEXT_BUDGET_CHARS
-        value: "120000"
-      - key: LLM_CHUNK_CHARS
-        value: "18000"
-      - key: LLM_CHUNK_OVERLAP_CHARS
-        value: "1200"
-      - key: LLM_MAX_CHUNKS_PER_ROUND
-        value: "8"
-      - key: LLM_MAX_REPAIR_CALLS
-        value: "1"
-      - key: LLM_ENABLE_CHUNK_SUMMARY
-        value: "true"
-      - key: LLM_ENABLE_FINAL_SYNTHESIS
-        value: "true"

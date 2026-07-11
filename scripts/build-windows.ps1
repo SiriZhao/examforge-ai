@@ -14,7 +14,7 @@ $pythonExe = Join-Path $backendVenv "Scripts\python.exe"
 $distDir = Join-Path $root "dist"
 $buildDir = Join-Path $root "build"
 $installerOut = Join-Path $distDir "installer"
-$appVersion = "0.5.0"
+$appVersion = "0.5.1"
 
 function Step {
     param([string]$Message)
@@ -51,7 +51,7 @@ function Stop-RunningCampusForge {
     $processes = $processes | Where-Object { $_ }
     if (-not $processes) { return }
 
-    Write-Host "CampusForge related processes are running. Attempting to stop them before rebuilding..." -ForegroundColor Yellow
+    Write-Host "Campus AI Workspace related processes are running. Attempting to stop them before rebuilding..." -ForegroundColor Yellow
     foreach ($process in $processes) {
         try {
             Stop-Process -Id $process.Id -Force -ErrorAction Stop
@@ -118,9 +118,9 @@ try {
     }
 
     Step "Build Windows executable with PyInstaller"
-    & $pythonExe -m PyInstaller CampusForge.spec --clean --noconfirm
+    & $pythonExe -m PyInstaller CampusAIWorkspace.spec --clean --noconfirm
 
-    $exePath = Join-Path $distDir "CampusForge.exe"
+    $exePath = Join-Path $distDir "CampusAIWorkspace.exe"
     if (-not (Test-Path $exePath)) {
         throw "PyInstaller did not produce $exePath"
     }
@@ -134,7 +134,7 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 throw "Inno Setup failed with exit code $LASTEXITCODE."
             }
-            $setupPath = Join-Path $installerOut "CampusForgeSetup-$appVersion.exe"
+            $setupPath = Join-Path $installerOut "CampusAIWorkspaceSetup-$appVersion.exe"
             if (Test-Path $setupPath) {
                 Write-Host "Installer: $setupPath" -ForegroundColor Green
             } else {
@@ -142,15 +142,14 @@ try {
             }
         } else {
             Write-Host "Inno Setup compiler was not found. Skipping installer build." -ForegroundColor Yellow
-            Write-Host "Install Inno Setup 6 and rerun this script to create dist\installer\CampusForgeSetup-$appVersion.exe."
+            Write-Host "Install Inno Setup 6 and rerun this script to create dist\installer\CampusAIWorkspaceSetup-$appVersion.exe."
         }
     }
 
     Write-Host ""
     Write-Host "Windows packaging completed." -ForegroundColor Green
-    Write-Host "EXE: dist\CampusForge.exe"
-    Write-Host "Installer: dist\installer\CampusForgeSetup-$appVersion.exe"
+    Write-Host "EXE: dist\CampusAIWorkspace.exe"
+    Write-Host "Installer: dist\installer\CampusAIWorkspaceSetup-$appVersion.exe"
 } finally {
     Pop-Location
 }
-

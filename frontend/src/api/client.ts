@@ -4,6 +4,21 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "/api";
 
 const api = axios.create({ baseURL: API_BASE_URL });
+export type Course = { id: string; name: string; description: string; exam_date: string };
+export type Conversation = { id: string; title: string; course_id?: string | null; archived?: boolean };
+export type WorkspaceMessage = { id: string; role: "user" | "assistant"; content: string; state?: string };
+
+export async function platformRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+  const response = await api.request<T>({ url: `/v1${path}`, method, data: body });
+  return response.data;
+}
+
+export async function platformUpload<T>(path: string, file: File): Promise<T> {
+  const body = new FormData();
+  body.append("uploaded", file);
+  const response = await api.post<T>(`/v1${path}`, body);
+  return response.data;
+}
 
 export type UploadedFileInfo = {
   original_filename: string;
