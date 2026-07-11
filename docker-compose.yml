@@ -1,20 +1,21 @@
 services:
-  campusforge:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    build: .
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/uploads:/data/uploads
-      - ./backend/outputs:/data/outputs
-      - ./backend/cache:/data/cache
+      - campus_workspace:/data
     environment:
       APP_MODE: cloud
-      APP_NAME: CampusForge
-      APP_VERSION: 0.5.0
+      APP_NAME: Campus AI Workspace
+      APP_VERSION: 0.5.1
+      DATABASE_URL: sqlite:////data/workspace.db
       STORAGE_DIR: /data
       UPLOAD_DIR: uploads
       OUTPUT_DIR: outputs
       OCR_CACHE_DIR: cache/ocr
-      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173","http://127.0.0.1:8000"]'
+      CORS_ORIGINS: '["http://localhost:8000","http://127.0.0.1:8000"]'
+      ENABLE_PYTHON_TOOL: "false"
+
+volumes:
+  campus_workspace:
