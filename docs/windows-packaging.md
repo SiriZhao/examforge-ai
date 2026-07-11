@@ -1,158 +1,18 @@
-# Windows Packaging
+# Windows 桌面版打包
 
-This guide explains how to package CampusForge as a Windows desktop executable and installer.
-
-The packaged app is designed for ordinary Windows users:
-
-- No Python installation required.
-- No Node.js installation required.
-- FastAPI runs as an embedded local service.
-- The React frontend is served from bundled static files.
-- Runtime data is stored under `%LOCALAPPDATA%\CampusForge`.
-
-## Build Locally
-
-Prerequisites for the build machine:
-
-- Windows 10 or newer.
-- Python 3.11 or newer.
-- Node.js 18 or newer.
-- Optional: Inno Setup 6 if you want an installer.
-
-Run from the repository root:
+在 Windows 构建机的仓库根目录运行：
 
 ```powershell
 .\scripts\build-windows.ps1
 ```
 
-The script will:
+脚本会构建 `frontend/dist`、运行测试、通过 PyInstaller 打包 FastAPI 与前端静态资源，并在安装 Inno Setup 时生成安装包。
 
-1. Remove old `dist/` and `build/`.
-2. Run `npm install`.
-3. Run `npm run build` to create `frontend/dist`.
-4. Create or reuse `backend/.venv`.
-5. Install backend dependencies and PyInstaller.
-6. Run backend tests.
-7. Run frontend tests.
-8. Run `pyinstaller CampusForge.spec`.
-9. Build the Inno Setup installer if `ISCC.exe` is available.
-
-Expected outputs:
+预期产物：
 
 ```text
-dist/CampusForge.exe
-dist/installer/CampusForgeSetup-0.5.1.exe
+dist/ExamForgeAI.exe
+dist/installer/ExamForgeAISetup-0.6.0.exe
 ```
 
-If Inno Setup is not installed, the script still produces `dist/CampusForge.exe`.
-
-## Runtime Data
-
-The packaged app does not write uploads, generated reports, or logs into the installation directory.
-
-Runtime data is stored here:
-
-```text
-%LOCALAPPDATA%\CampusForge
-```
-
-Subdirectories:
-
-- `uploads/`
-- `outputs/`
-- `logs/`
-
-The main desktop startup log is:
-
-```text
-%LOCALAPPDATA%\CampusForge\logs\desktop.log
-```
-
-## Release on GitHub
-
-Recommended release checklist:
-
-1. Run the full packaging script:
-
-   ```powershell
-   .\scripts\build-windows.ps1
-   ```
-
-2. Smoke test `dist/CampusForge.exe` on the build machine.
-3. Test the installer `dist/installer/CampusForgeSetup-0.5.1.exe`.
-4. Ideally test on a clean Windows VM without Python and Node.js installed.
-5. Create a GitHub Release named `v0.5.1`.
-6. Upload:
-
-   ```text
-   dist/CampusForge.exe
-   dist/installer/CampusForgeSetup-0.5.1.exe
-   ```
-
-7. Include release notes:
-
-   - Local desktop app.
-   - No Python or Node.js required for end users.
-   - Runtime data path: `%LOCALAPPDATA%\CampusForge`.
-   - Known OCR limitations.
-
-## Common Issues
-
-### Windows Defender or SmartScreen warning
-
-Unsigned PyInstaller apps may trigger SmartScreen or antivirus warnings, especially for early open-source releases with low reputation.
-
-Recommended mitigations:
-
-- Publish checksums for release assets.
-- Build from a clean CI or clean Windows VM.
-- Avoid bundling unrelated files.
-- Consider code signing for public releases.
-
-### First startup is slow
-
-The executable may take longer on first launch because PyInstaller extracts bundled files to a temporary directory before starting FastAPI.
-
-This is expected, especially when OCR and ONNX Runtime dependencies are included.
-
-### OCR makes the executable large
-
-OCR dependencies such as `rapidocr_onnxruntime`, `onnxruntime`, `opencv-python`, and model/runtime libraries can significantly increase file size.
-
-Options:
-
-- Keep OCR bundled for one-click usability.
-- Offer a smaller "no OCR" build later.
-- Download OCR language/model data on first run in a future release.
-
-### Scanned PDF OCR does not work
-
-Scanned PDF OCR may require Poppler and OCR runtime support. The app still works for text PDFs, PPTX, DOCX, Markdown, and images that can be parsed by bundled providers.
-
-Check:
-
-```text
-%LOCALAPPDATA%\CampusForge\logs\desktop.log
-```
-
-### App starts but browser does not open
-
-Open the log file:
-
-```text
-%LOCALAPPDATA%\CampusForge\logs\desktop.log
-```
-
-The app writes the local URL it started, usually `http://127.0.0.1:<port>`.
-
-### Port conflict
-
-The desktop app automatically asks the OS for a free local port, so fixed-port conflicts should not block startup.
-
-### Installer uninstall keeps data
-
-Uninstalling CampusForge keeps user data by design. Delete this folder manually if needed:
-
-```text
-%LOCALAPPDATA%\CampusForge
-```
+桌面版数据保存在 `%LOCALAPPDATA%\ExamForgeAI`。前端资源打入 `frontend/dist`，运行时通过 `sys._MEIPASS` 查找；若浏览器未自动打开，请查看 `%LOCALAPPDATA%\ExamForgeAI\logs\desktop.log` 的本地 URL。发布时只把 EXE 或安装包作为 GitHub Release assets 上传，不提交到 main 分支。

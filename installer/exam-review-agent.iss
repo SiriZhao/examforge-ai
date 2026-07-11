@@ -1,10 +1,10 @@
-#define MyAppName "Campus AI Workspace"
-#define MyShortcutName "Campus AI Workspace"
-#define MyAppVersion "0.5.1"
+#define MyAppName "ExamForge AI"
+#define MyShortcutName "ExamForge AI"
+#define MyAppVersion "0.6.0"
 #define MyAppPublisher "SiriZhao"
 #define MyAppURL "https://github.com/SiriZhao/examforge-ai"
-#define MyAppExeName "CampusAIWorkspace.exe"
-#define MyUserDataDir "{localappdata}\CampusAIWorkspace"
+#define MyAppExeName "ExamForgeAI.exe"
+#define MyUserDataDir "{localappdata}\ExamForgeAI"
 
 [Setup]
 AppId={{D92F62E9-DBBA-43D2-856A-8F1B3C8BB7A7}
@@ -16,13 +16,13 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription=Campus AI Workspace AI study SaaS desktop client
+VersionInfoDescription=ExamForge AI desktop application
 VersionInfoCopyright=Copyright 2026 SiriZhao
-DefaultDirName={localappdata}\Programs\Campus AI Workspace
+DefaultDirName={localappdata}\Programs\ExamForge AI
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
-OutputBaseFilename=CampusAIWorkspaceSetup-0.5.1
+OutputBaseFilename=ExamForgeAISetup-0.6.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -51,7 +51,7 @@ begin
   if CurUninstallStep = usPostUninstall then
   begin
     MsgBox(
-      'Campus AI Workspace has been uninstalled.' + #13#10 + #13#10 +
+      'ExamForge AI has been uninstalled.' + #13#10 + #13#10 +
       'Local uploads, exports, logs, and caches may remain in:' + #13#10 +
       ExpandConstant('{#MyUserDataDir}') + #13#10 + #13#10 +
       'Delete that folder manually if you no longer need the data.',

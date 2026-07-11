@@ -1,13 +1,9 @@
-# Deployment
+# 部署模式
 
-CampusForge supports three modes:
+| 模式 | 用途 |
+| --- | --- |
+| `local_dev` | Vite 与 FastAPI 本地开发 |
+| `desktop` | PyInstaller 打包的私密 Windows 桌面版 |
+| `cloud` | Docker 托管的网页端 |
 
-| Mode | How it runs | Best for |
-| --- | --- | --- |
-| `local_dev` | Vite dev server + FastAPI dev server | Development |
-| `desktop` | Windows exe built by PyInstaller/Inno Setup | Private local use |
-| `cloud` | Docker container serving FastAPI + frontend SPA | Browser-only web app |
-
-For cloud deployment, see [cloud-deployment.md](cloud-deployment.md).
-
-For Windows desktop packaging, see [windows-packaging.md](windows-packaging.md).
+云端部署见 [cloud-deployment.md](cloud-deployment.md)，桌面打包见 [windows-packaging.md](windows-packaging.md)。公共云端默认使用临时匿名工作空间，不配置开发者统一模型 Key。

@@ -1,38 +1,5 @@
-# Windows Desktop Build
+# Windows 桌面版
 
-The desktop edition packages the FastAPI backend and built frontend into a Windows executable.
+运行 `scripts/build-windows.ps1` 会先构建前端，再将 `frontend/dist` 加入 PyInstaller 数据文件，输出 `dist/ExamForgeAI.exe` 和可选安装包 `dist/installer/ExamForgeAISetup-0.6.0.exe`。
 
-## Build
-
-Run from the repository root:
-
-```powershell
-.\scripts\build-windows.ps1
-```
-
-The script should:
-
-1. Stop old CampusForge processes.
-2. Remove old `dist/` and `build/` outputs.
-3. Build `frontend/dist`.
-4. Run PyInstaller with `CampusForge.spec`.
-5. Include `frontend/dist` in the packaged executable.
-6. Produce `dist/CampusForge.exe`.
-7. Produce `dist/installer/CampusForgeSetup-0.5.1.exe` when Inno Setup is available.
-
-## Verify
-
-Start:
-
-```powershell
-.\dist\CampusForge.exe
-```
-
-Then check:
-
-- The browser opens CampusForge.
-- `/api/health` returns JSON with version and mode.
-- The page does not show `Frontend build not found`.
-- A small file can be uploaded and exported.
-
-Do not commit `dist/`, `build/`, or executable files to the main branch. Upload them only to GitHub Releases.
+桌面版使用本机工作空间、上传目录、输出目录和 OCR 缓存。前端路径兼容 `sys._MEIPASS`，启动后会在随机本地端口打开浏览器，不应出现 `Frontend build not found`。

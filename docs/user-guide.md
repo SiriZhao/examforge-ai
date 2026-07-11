@@ -1,24 +1,9 @@
-# CampusForge User Guide
+# 用户指南
 
-## Web App
-
-1. Open the deployed CampusForge URL.
-2. Enter a course or exam name.
-3. Upload courseware, textbooks, notes, past exams, scanned PDFs, images, Markdown, TXT, DOCX, or PPTX files.
-4. Choose study goal, exam type, OCR mode, detail level, and output style.
-5. Enable AI deep organization when you have a DeepSeek or OpenAI-compatible API key, or use local safe draft mode without a key.
-6. Click Generate and wait for parsing, OCR, evidence building, chunked LLM processing, quality checks, and export preparation.
-7. Review study units, high-frequency topics, question type analysis, mock exam, Anki cards, sprint plan, quality score, and generation summary.
-8. Download Markdown, Word, PDF, or Anki CSV.
-
-## Long Materials
-
-For large PDFs or many files, CampusForge automatically switches to chunked LLM processing. It extracts chunk insights first, then synthesizes a final report. If the model still reports `CONTEXT_TOO_LONG`, the system retries with a compact evidence pack before falling back to the local safe draft.
-
-## API Key Options
-
-- Server key: the deployment owner configures a key in environment variables. Users can use AI mode directly.
-- User key: the user enters a key in the browser. The server uses it for the request and should not persist it.
-- No key: the app generates a local safe draft.
-
-Use HTTPS when sending a user-provided API key.
+1. 创建复习项目，填写课程与考试信息。
+2. 上传资料并确认每份文件的角色。
+3. 阅读资料诊断，补充课程纲要、往年题或答案解析。
+4. 启动生成，查看模块状态和质量提示。
+5. 优先复习 S/A 级重点，再使用模拟卷、主动回忆题和 Anki 自测。
+6. 对低质量模块使用局部重新生成，而不是从头生成全部资料。
+7. 导出完整包或 Anki CSV。

@@ -1,40 +1,35 @@
-# Campus AI Workspace
+# ExamForge AI
 
-> Campus AI Workspace is the next evolution of ExamForge AI.
+> AI Final Exam Review Pack Generator for University Students
 
-你的个人 AI 学习与开发工作台：无需注册，用户自带模型，数据默认保存在本地。原有 OCR、多文件证据整理、长文档分块、复习资料、模拟题、Anki 与多格式导出能力继续作为 **ExamForge Review Engine** 提供。
+ExamForge AI 是一个面向大学生期末考试的 AI 复习资料生成器。它不再试图成为通用工作台，而是专注把课件、教材、笔记、课程纲要、往年题和扫描试卷变成可复习、可刷题、可导出的资料系统。
 
-当前版本：**v0.5.1**
-仓库：[SiriZhao/examforge-ai](https://github.com/SiriZhao/examforge-ai)
-许可：MIT
+当前版本：**v0.6.0**。项目曾尝试扩展为 Campus AI Workspace，现已重新聚焦于复习资料生成的深度、可靠性和可执行性。
 
-## 核心能力
+## 为什么不是直接把 PDF 发给 ChatGPT
 
-- 无注册、无登录、无 JWT 的本地工作空间。
-- SQLite `workspace.db` 保存课程、聊天、知识块、记忆与 Agent 任务。
-- PDF、PPTX、DOCX、Markdown、TXT 和图片解析；扫描内容支持 OCR。
-- 课程知识库、分块检索与真实 `chunk_id`、文件名、页码引用。
-- 学习 Agent 任务规划与显式记忆管理。
-- ExamForge 复习资料、往年题分析、模拟卷、Anki CSV、Markdown/DOCX/PDF 导出。
-- DeepSeek、OpenAI、OpenAI Compatible、Claude Compatible 的浏览器本地 BYOK 配置。
-- Docker Web 版和 Windows 桌面版。
+- 自动区分课程纲要、课件、教材、笔记、往年题、答案和错题的作用。
+- 多文件证据整合：课程范围限制边界，往年题影响题型与重点，答案影响评分点。
+- 长资料经过 OCR 清洗、智能分块、chunk insight、evidence pack 和分阶段合成，避免直接塞满上下文。
+- 生成重点优先级地图、复习讲义、往年题分析、题型攻略、模拟卷、主动回忆题、Anki 和冲刺计划。
+- 可导出 Markdown、DOCX、PDF 与 Anki CSV。
 
-## 使用方法
+## 五步流程
 
-1. 打开应用，首次点击“开始使用”。
-2. 在“设置”中选择供应商，填写 API Key、Base URL 和模型名称。
-3. 配置只保存在当前浏览器；测试连接由浏览器直连供应商，不经过项目后端。
-4. 创建课程，上传课件、教材、笔记或往年题。
-5. 使用课程知识库、Agent 任务或进入“复习资料”生成完整资料包。
+1. 创建复习项目：填写课程、考试日期、考试形式、每日时间、掌握程度和目标。
+2. 上传并标记资料：PDF、PPTX、DOCX、Markdown、TXT、PNG、JPG、JPEG。
+3. 查看资料诊断：完整度、资料角色、缺口、风险和推荐策略。
+4. 分模块生成：重点地图、讲义、往年题分析、题型、模拟卷、Anki、易错点和冲刺计划。
+5. 复习与导出：局部优化、保存版本、导出完整包或单独模块。
 
-未配置模型时不会报错，系统会提示前往设置；课程知识库、OCR 和 ExamForge 本地安全底稿仍可使用。部分模型供应商不允许浏览器跨域请求，此时浏览器直连测试可能失败，Key 仍不会上传到 Campus AI Workspace 服务器。
+## BYOK
 
-## 数据控制
+无需注册。用户自己提供 DeepSeek、OpenAI 或 OpenAI-compatible API 配置。
 
-- “设置 → 导出工作空间”导出课程、对话和记忆元数据，不包含 API Key。
-- “设置 → 清空本地数据”删除 SQLite 业务数据和工作空间上传文件。
-- API Key 位于浏览器 `localStorage`，清理浏览器站点数据即可移除。
-- 当前“导入工作空间”仍在格式校验设计阶段，界面不会伪装为已完成。
+- API Key 默认只保存于当前浏览器 `localStorage`。
+- 不写入工作空间数据库、日志、GitHub 或错误响应。
+- 未配置模型时仍可生成本地安全底稿和资料诊断。
+- 公共网页使用时必须通过 HTTPS；部分服务商禁止浏览器跨域测试，界面会给出中文提示。
 
 ## 本地开发
 
@@ -44,8 +39,6 @@ python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --port 8000
 ```
 
-另开终端：
-
 ```powershell
 cd frontend
 npm install
@@ -53,17 +46,18 @@ $env:VITE_API_BASE_URL="http://127.0.0.1:8000/api"
 npm run dev
 ```
 
-访问 `http://localhost:5173`。
-
-## Docker
+## Docker 和云端
 
 ```bash
-docker compose up --build
+docker build -t examforge-ai:0.6.0 .
+docker run --rm -p 8000:8000 --env-file .env.example examforge-ai:0.6.0
 ```
 
-访问 `http://127.0.0.1:8000`、`/api/health` 和 `/api/ready`。容器使用持久化 volume 保存 `/data/workspace.db` 和课程资料。
+云端模式为匿名工作空间：浏览器保存随机 `workspace_id` 与 secret，后端验证资源归属。上传文件和报告根据 `TEMP_FILE_TTL_HOURS` 定期清理；敏感资料建议使用桌面版。
 
-云端版本仍是单一私人工作空间，不具备多用户隔离。不要把无访问控制的实例直接公开给不受信任用户；建议放在 VPN、反向代理认证或平台访问控制之后，并启用 HTTPS 和严格 CORS。
+Render：连接仓库，选择 Docker，Health Check 填 `/api/health`，挂载持久盘 `/data`。默认不设置开发者模型 Key，设置 `ENABLE_SERVER_LLM_KEY=false`。
+
+Railway/Fly.io：使用根目录 Dockerfile，设置 `APP_MODE=cloud`、`APP_VERSION=0.6.0`、`PUBLIC_BASE_URL`、`CORS_ORIGINS` 和持久化 `/data`。
 
 ## Windows 桌面版
 
@@ -71,34 +65,26 @@ docker compose up --build
 .\scripts\build-windows.ps1
 ```
 
-输出：
+生成：
 
-- `dist/CampusAIWorkspace.exe`
-- `dist/installer/CampusAIWorkspaceSetup-0.5.1.exe`（本机有 Inno Setup 时）
+- `dist/ExamForgeAI.exe`
+- `dist/installer/ExamForgeAISetup-0.6.0.exe`
 
-构建产物只上传 GitHub Release，不提交到 `main`。
+桌面版通过 PyInstaller 打包前端静态资源，使用 `sys._MEIPASS` 查找 `frontend/dist`，双击后自动打开本地网页；文件、OCR 缓存和工作空间均保存在本机。
 
-## API 与隐私
+## 隐私与免责声明
 
-- 新工作台 API 前缀为 `/api/v1`，无需认证，仅用于单一私人工作空间。
-- 后端没有保存 BYOK Key 的接口，不记录 Authorization 或完整用户材料。
-- 旧 ExamForge Review Engine 仍保留兼容 Provider；使用前应确认供应商隐私条款。
 - 不要上传无权处理的课程、考试或个人敏感资料。
+- 外部模型生成内容仅作学习辅助，必须核对原始材料与教师要求。
+- 不承诺押题准确，也不鼓励作弊或泄露考试内容。
+- 公共云端应启用 HTTPS、上传限制、TTL 清理和访问隔离。
 
-## 当前边界
+## Roadmap
 
-课程检索目前是带真实引用的关键词检索 MVP；向量检索、SSE 流式聊天、项目代码 Diff、受限工具执行和工作空间导入仍在 Roadmap。Python 工具默认关闭。生成内容仅供学习辅助，用户应核对原始材料和教师要求。
-
-## 文档
-
-- [架构](docs/architecture.md)
-- [API](docs/api.md)
-- [数据库](docs/database.md)
-- [开发](docs/development.md)
-- [安全](docs/security.md)
-- [隐私](docs/privacy.md)
-- [云端部署](docs/cloud-deployment.md)
-- [Windows 桌面版](docs/windows-desktop.md)
+- 模块级 LLM 生成与重试状态持久化。
+- 更强的往年题分值分析、主动回忆题与在线自测。
+- 单模块导出、报告编辑器和版本恢复界面。
+- 向量检索与更精细的引用面板。
 
 ## License
 

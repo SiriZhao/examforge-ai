@@ -4,20 +4,33 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "/api";
 
 const api = axios.create({ baseURL: API_BASE_URL });
-export type Course = { id: string; name: string; description: string; exam_date: string };
-export type Conversation = { id: string; title: string; course_id?: string | null; archived?: boolean };
-export type WorkspaceMessage = { id: string; role: "user" | "assistant"; content: string; state?: string };
 
-export async function platformRequest<T>(path: string, method = "GET", body?: unknown): Promise<T> {
-  const response = await api.request<T>({ url: `/v1${path}`, method, data: body });
+function workspaceHeaders(): Record<string, string> {
+  const id = window.localStorage.getItem("examforge-workspace-id");
+  const secret = window.localStorage.getItem("examforge-workspace-secret");
+  return id && secret ? { "X-Workspace-Id": id, "X-Workspace-Secret": secret } : {};
+}
+export type ReviewProject = { id: string; course_name: string; exam_date: string; exam_type: string; daily_minutes: number; mastery_level: string };
+
+export async function reviewApi<T>(path: string, method = "GET", body?: unknown): Promise<T> {
+  const response = await api.request<T>({ url: `/review-projects${path}`, method, data: body, headers: workspaceHeaders() });
   return response.data;
 }
 
-export async function platformUpload<T>(path: string, file: File): Promise<T> {
+export async function reviewUpload<T>(path: string, files: File[]): Promise<T> {
   const body = new FormData();
-  body.append("uploaded", file);
-  const response = await api.post<T>(`/v1${path}`, body);
+  files.forEach((file) => body.append("files", file));
+  const response = await api.post<T>(`/review-projects${path}`, body, { headers: workspaceHeaders() });
   return response.data;
+}
+
+export async function ensureReviewWorkspace(): Promise<void> {
+  const id = window.localStorage.getItem("examforge-workspace-id");
+  const secret = window.localStorage.getItem("examforge-workspace-secret");
+  if (id && secret) return;
+  const response = await api.post<{ workspace_id: string; workspace_secret: string }>("/review-projects/workspace", {});
+  window.localStorage.setItem("examforge-workspace-id", response.data.workspace_id);
+  window.localStorage.setItem("examforge-workspace-secret", response.data.workspace_secret);
 }
 
 export type UploadedFileInfo = {
@@ -275,24 +288,6 @@ export type GenerateReviewJob = {
   updated_at: string;
 };
 
-export type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-export type MockExamQuestion = {
-  question: string;
-  answer: string;
-  chapter: string;
-  concept: string;
-  question_type: string;
-};
-
-export type GenerateMockExamResponse = {
-  questions: MockExamQuestion[];
-  message: string;
-};
-
 export type GenerateReviewParams = {
   files: string[];
   export_format?: ExportFormat;
@@ -350,37 +345,6 @@ export async function createGenerateReviewJob(params: GenerateReviewParams): Pro
 
 export async function getGenerateReviewJob(jobId: string): Promise<GenerateReviewJob> {
   return request<GenerateReviewJob>(`/review/jobs/${jobId}`, { method: "GET" });
-}
-
-export async function testLLMConnection(config: LLMConfig): Promise<LLMTestResponse> {
-  return request<LLMTestResponse>("/api/llm/test", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(config),
-  });
-}
-
-export async function chat(params: {
-  message: string;
-  review_report: ReviewReport | null;
-  history: ChatMessage[];
-}): Promise<{ reply: string }> {
-  return request<{ reply: string }>("/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-}
-
-export async function generateMockExam(
-  reviewReport: ReviewReport,
-  count = 8,
-): Promise<GenerateMockExamResponse> {
-  return request<GenerateMockExamResponse>("/generate-mock-exam", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ review_report: reviewReport, count }),
-  });
 }
 
 export function downloadUrl(downloadPath: string): string {

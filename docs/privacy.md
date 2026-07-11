@@ -1,21 +1,7 @@
-# Privacy Notice
+# 隐私说明
 
-CampusForge can run as a local desktop app or as a cloud web app. Privacy expectations differ by deployment mode.
+云端版会在服务器临时处理上传资料、OCR 结果和导出文件，并在 `TEMP_FILE_TTL_HOURS` 到期后清理。使用 AI 深度整理时，必要的材料证据会发送给用户指定的模型服务商。
 
-## Cloud Deployments
+用户自己的 API Key 默认只保存在当前浏览器；ExamForge AI 不将其写入工作空间数据库或日志。对隐私敏感、受学校限制或不适合外发的资料，请使用 Windows 桌面版并确认外部模型服务的条款。
 
-- Uploaded files are processed by the server that hosts CampusForge.
-- Generated reports, exports, OCR cache, and temporary files are stored in the configured runtime directories until cleanup.
-- If the deployer configures a server-side LLM API key, selected material evidence may be sent to the configured LLM provider.
-- If a user provides their own API key, the backend uses it for the current request and does not intentionally persist it on the server.
-- Production deployments should use HTTPS before accepting user-provided API keys.
-
-## Desktop Deployments
-
-The Windows desktop build is better for sensitive materials because uploads, exports, logs, and caches stay on the user's machine.
-
-## User Responsibility
-
-Do not upload materials you are not authorized to process, redistribute, or send to third-party APIs. Avoid uploading files containing personal data, private exam content, or institution-restricted materials unless you have permission.
-
-Deployers are responsible for complying with applicable laws, school or organization rules, and third-party API terms.
+请只上传拥有合法处理权限的资料。部署者应自行遵守所在地法律、学校规定和模型服务条款。

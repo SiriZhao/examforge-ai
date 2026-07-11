@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import analyze, chat, download, export, generate_review, generate_review_jobs, llm, mock_exam, parse, platform, upload
+from app.routers import analyze, download, export, generate_review, generate_review_jobs, llm, mock_exam, parse, review_projects, upload
 from app.services.cloud_runtime import (
     cleanup_runtime_files,
     ensure_runtime_directories,
@@ -24,7 +24,7 @@ from app.utils.logging_config import configure_logging
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     ensure_runtime_directories()
-    platform.initialize_platform_database()
+    review_projects.initialize_review_database()
     cleanup_runtime_files()
     yield
 
@@ -46,12 +46,11 @@ app.include_router(parse.router, tags=["parse"])
 app.include_router(generate_review.router, tags=["generate-review"])
 app.include_router(generate_review_jobs.router, tags=["generate-review"])
 app.include_router(llm.router)
-app.include_router(chat.router, tags=["chat"])
 app.include_router(mock_exam.router, tags=["mock-exam"])
 app.include_router(download.router, tags=["download"])
 app.include_router(analyze.router, prefix="/api/analyze", tags=["analyze"])
 app.include_router(export.router, prefix="/api/export", tags=["export"])
-app.include_router(platform.router)
+app.include_router(review_projects.router)
 
 
 @app.get("/health")
@@ -75,7 +74,7 @@ def health_check() -> dict[str, str | bool]:
 def readiness_check() -> dict[str, str | bool]:
     return {
         "status": "ready" if is_storage_writable() else "degraded",
-        "database": platform.database_ready(),
+        "database": review_projects.database_ready(),
         "storage": is_storage_writable(),
         "version": settings.app_version,
     }

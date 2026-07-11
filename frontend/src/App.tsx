@@ -1,33 +1,165 @@
-import { useEffect, useState } from "react";
-import LegacyReview from "./features-review-legacy";
-import { platformRequest, platformUpload, type Conversation, type Course, type LLMConfig, type WorkspaceMessage } from "./api/client";
+import { useEffect, useMemo, useState } from "react";
 
-type View = "chat" | "courses" | "review" | "agent" | "memory" | "projects" | "settings";
-const nav: Array<[View, string]> = [["chat","AI 对话"],["courses","课程空间"],["review","复习资料"],["agent","Agent 任务"],["memory","记忆中心"],["projects","项目仓库"],["settings","设置"]];
+import {
+  createGenerateReviewJob,
+  ensureReviewWorkspace,
+  getGenerateReviewJob,
+  reviewApi,
+  reviewUpload,
+  type LLMConfig,
+  type OCRConfig,
+  type ReviewProject,
+} from "./api/client";
+import { ReportView } from "./components/ReportView";
+
+type Step = "settings" | "materials" | "diagnosis" | "progress" | "report" | "mock" | "anki" | "plan" | "export";
+type MaterialRole = "slides" | "textbook" | "notes" | "syllabus" | "past_exam" | "answer_key" | "mistakes" | "other";
+
+const steps: Array<[Step, string]> = [
+  ["settings", "1. 复习设置"], ["materials", "2. 上传资料"], ["diagnosis", "3. 资料诊断"],
+  ["progress", "4. 生成进度"], ["report", "5. 复习资料"], ["mock", "6. 模拟测试"],
+  ["anki", "7. Anki 卡片"], ["plan", "8. 冲刺计划"], ["export", "9. 导出"],
+];
+
+const materialRoles: Array<[MaterialRole, string]> = [
+  ["slides", "课程课件"], ["textbook", "教材"], ["notes", "个人笔记"], ["syllabus", "课程纲要 / 考试范围"],
+  ["past_exam", "往年试卷"], ["answer_key", "答案解析"], ["mistakes", "错题"], ["other", "其他资料"],
+];
+
+const defaultLlm: LLMConfig = { enabled: false, provider: "deepseek", api_key: "", base_url: "https://api.deepseek.com", model: "" };
 
 export default function App() {
-  const [view, setView] = useState<View>("chat");
-  const [welcome, setWelcome] = useState(() => !localStorage.getItem("campus-ai-welcomed"));
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [active, setActive] = useState<string | null>(null);
-  const [messages, setMessages] = useState<WorkspaceMessage[]>([]);
-  useEffect(() => { Promise.all([platformRequest<Course[]>("/courses"), platformRequest<Conversation[]>("/conversations")]).then(([a,b]) => { setCourses(a); setConversations(b); }); }, []);
-  async function newChat() { const item = await platformRequest<Conversation>("/conversations","POST",{title:"新对话",course_id:courses[0]?.id||null}); setConversations(x=>[item,...x]); setActive(item.id); setMessages([]); setView("chat"); }
-  async function openChat(id:string){ setActive(id); setMessages(await platformRequest<WorkspaceMessage[]>(`/conversations/${id}/messages`)); setView("chat"); }
-  if (view === "review") return <div className="legacy-module"><button className="back-workspace" onClick={()=>setView("chat")}>← 返回工作台</button><LegacyReview /></div>;
-  return <div className="campus-shell">
-    {welcome && <Welcome onStart={()=>{localStorage.setItem("campus-ai-welcomed","1");setWelcome(false);}} />}
-    <aside className="workspace-sidebar"><div className="workspace-brand"><span>CA</span><div><strong>Campus AI</strong><small>Workspace</small></div></div><button className="new-chat" onClick={newChat}>＋ 新建对话</button><nav>{nav.map(([id,label])=><button key={id} className={view===id?"active":""} onClick={()=>setView(id)}>{label}</button>)}</nav><div className="conversation-list"><small>历史对话</small>{conversations.map(x=><button key={x.id} onClick={()=>openChat(x.id)}>{x.title}</button>)}</div><div className="user-chip"><span>本</span><div><strong>本地工作空间</strong><small>数据保存在当前设备</small></div></div></aside>
-    <main className="workspace-main"><header className="workspace-topbar"><div><strong>{nav.find(x=>x[0]===view)?.[1]}</strong><span>{courses[0]?.name||"未选择课程"}</span></div><span>v0.5.1 · BYOK</span></header>{view==="chat"&&<Chat active={active} messages={messages} setMessages={setMessages} onCreate={newChat} onSettings={()=>setView("settings")} />}{view==="courses"&&<Courses courses={courses} setCourses={setCourses}/>} {view==="agent"&&<Agent courses={courses}/>} {view==="memory"&&<Memory courses={courses}/>} {view==="settings"&&<Settings/>} {view==="projects"&&<Empty title="项目仓库" text="代码项目管理与 Diff 能力仍在 Beta Roadmap。"/>}</main>
-    <aside className="context-panel"><h3>学习上下文</h3><div className="context-block"><small>当前课程</small><strong>{courses[0]?.name||"创建课程后开始"}</strong></div><div className="context-block"><small>隐私模式</small><p>工作空间数据保存在 SQLite；API Key 只保存在当前浏览器。</p></div><div className="context-block"><small>复习引擎</small><p>ExamForge Review Engine 可继续生成模拟卷、Anki 和多格式导出。</p></div></aside>
+  const [step, setStep] = useState<Step>("settings");
+  const [project, setProject] = useState<ReviewProject | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploaded, setUploaded] = useState<Array<{ id: string; saved_filename: string; original_filename: string }>>([]);
+  const [rolesByFile, setRoles] = useState<Record<string, MaterialRole>>({});
+  const [diagnosis, setDiagnosis] = useState<any>(null);
+  const [job, setJob] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
+  const [status, setStatus] = useState("");
+  const [form, setForm] = useState({ course_name: "", exam_date: "", exam_type: "unknown", daily_minutes: 90, mastery_level: "forgotten", target_score: "", focus: "" });
+  const [llm, setLlm] = useState<LLMConfig>(() => {
+    try { return JSON.parse(localStorage.getItem("examforge-byok") || "null") || defaultLlm; } catch { return defaultLlm; }
+  });
+
+  useEffect(() => {
+    void ensureReviewWorkspace().catch(() => setStatus("无法初始化本地工作空间，请刷新后重试。"));
+  }, []);
+
+  const completed = useMemo<Record<Step, boolean>>(() => ({
+    settings: Boolean(project), materials: uploaded.length > 0, diagnosis: Boolean(diagnosis), progress: Boolean(job),
+    report: Boolean(result), mock: Boolean(result), anki: Boolean(result), plan: Boolean(result), export: Boolean(result),
+  }), [project, uploaded, diagnosis, job, result]);
+
+  async function createProject() {
+    const item = await reviewApi<ReviewProject>("/projects", "POST", form);
+    setProject(item); setStep("materials"); setStatus("复习项目已创建。下一步上传并标记资料用途。");
+  }
+
+  async function upload() {
+    if (!project || files.length === 0) return;
+    setStatus("正在检查并上传资料...");
+    const response = await reviewUpload<{ files: Array<{ id: string; saved_filename: string; original_filename: string; role: MaterialRole }> }>(`/projects/${project.id}/upload`, files);
+    setUploaded(response.files);
+    setRoles(Object.fromEntries(response.files.map((item) => [item.saved_filename, item.role])));
+    setStatus("请确认每份资料的用途，再开始诊断。");
+  }
+
+  async function diagnose() {
+    if (!project || uploaded.length === 0) return;
+    setStatus("正在解析资料、识别角色并生成复习诊断...");
+    await Promise.all(uploaded.map((item) => reviewApi(`/projects/${project.id}/files/${item.id}`, "PATCH", { role: rolesByFile[item.saved_filename] || "other" })));
+    const data = await reviewApi(`/projects/${project.id}/diagnosis`);
+    setDiagnosis(data); setStep("diagnosis"); setStatus("资料诊断完成。确认策略后开始分模块生成。");
+  }
+
+  async function generate() {
+    if (!project) return;
+    setStep("progress"); setStatus("正在创建生成任务：长资料会分块处理，并尽量保留往年题、定义、公式与例题。");
+    const created = await createGenerateReviewJob({
+      files: uploaded.map((item) => item.saved_filename), title: project.course_name, course_name: project.course_name,
+      export_format: "md", export_formats: ["md", "docx", "pdf"], study_goal: "balanced", exam_type: form.exam_type as any,
+      detail_level: "detailed", output_style: "teaching_assistant", enable_chunked_llm: true, retry_on_context_too_long: true,
+      ocr_config: { provider: "rapidocr", mode: "fast", language: "chi_sim+eng" } as OCRConfig,
+      llm_config: { ...llm, enabled: Boolean(llm.api_key) },
+    });
+    setJob(created);
+    for (;;) {
+      await new Promise((resolve) => window.setTimeout(resolve, 900));
+      const current = await getGenerateReviewJob(created.job_id);
+      setJob(current); setStatus(current.message);
+      if (current.status === "completed") { setResult(current.result); setStep("report"); return; }
+      if (current.status === "failed") throw new Error(current.error || "生成失败");
+    }
+  }
+
+  function saveKey() {
+    localStorage.setItem("examforge-byok", JSON.stringify(llm));
+    setStatus("API 配置仅保存在当前浏览器。生成时会临时转发给你选择的模型服务，不会写入项目数据库或日志。");
+  }
+
+  async function testKey() {
+    if (!llm.api_key || !llm.base_url) { setStatus("请先填写 API Key 和 Base URL。"); return; }
+    try {
+      const base = llm.base_url.replace(/\/$/, "");
+      const response = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${llm.api_key}` }, signal: AbortSignal.timeout(15_000) });
+      setStatus(response.ok ? "模型连接成功。API Key 只用于本次浏览器连接测试。" : `连接未成功（HTTP ${response.status}），请检查 Base URL、模型名称和 Key。`);
+    } catch {
+      setStatus("连接测试未成功。请检查网络、Base URL、浏览器 CORS 限制和 API Key。Key 没有发送到 ExamForge 服务器。");
+    }
+  }
+
+  return <div className="examforge-app">
+    <header className="examforge-top"><div><strong>ExamForge AI</strong><span>面向大学生期末考试的 AI 复习资料生成器</span></div><div><span className={llm.api_key ? "model-on" : "model-off"}>{llm.api_key ? "模型已配置" : "未配置模型"}</span><button onClick={() => setStep("settings")}>设置</button></div></header>
+    <div className="examforge-layout">
+      <aside className="step-nav">{steps.map(([id, label]) => <button key={id} className={step === id ? "active" : ""} onClick={() => setStep(id)} disabled={!completed[id] && !["settings", "materials"].includes(id)}>{completed[id] ? "✓ " : ""}{label}</button>)}</aside>
+      <main className="examforge-main">
+        {status && <div className="status-bar">{status}</div>}
+        {step === "settings" && <Settings form={form} setForm={setForm} llm={llm} setLlm={setLlm} onCreate={createProject} onSave={saveKey} onTest={testKey} />}
+        {step === "materials" && <Materials files={files} setFiles={setFiles} uploaded={uploaded} roles={rolesByFile} setRoles={setRoles} onUpload={upload} onDiagnose={diagnose} />}
+        {step === "diagnosis" && <Diagnosis diagnosis={diagnosis} onGenerate={generate} />}
+        {step === "progress" && <Progress job={job} />}
+        {["report", "mock", "anki", "plan", "export"].includes(step) && result && <ReportView result={result} exporting={null} onExport={() => undefined} />}
+      </main>
+      <aside className="review-context"><h3>复习项目</h3><strong>{project?.course_name || "尚未创建"}</strong><p>无需注册 · 使用自己的 API</p>{diagnosis && <><h4>资料完整度</h4><strong>{diagnosis.material_completeness}/100</strong><h4>生成策略</h4>{diagnosis.recommended_strategy.map((item: string) => <p key={item}>{item}</p>)}</>}</aside>
+    </div>
   </div>;
 }
 
-function Welcome({onStart}:{onStart:()=>void}){return <div className="welcome-overlay"><section><div className="logo-mark">CA</div><h1>Campus AI Workspace</h1><p>你的个人 AI 学习与开发工作台</p><ul><li>支持用户自己的 AI API</li><li>数据保存在本地</li><li>支持课程知识库</li><li>支持 AI Agent 学习任务</li><li>支持 ExamForge 复习资料生成</li></ul><button onClick={onStart}>开始使用</button></section></div>}
-function Chat({active,messages,setMessages,onCreate,onSettings}:{active:string|null;messages:WorkspaceMessage[];setMessages:React.Dispatch<React.SetStateAction<WorkspaceMessage[]>>;onCreate:()=>void;onSettings:()=>void}){const[text,setText]=useState("");async function send(){if(!active||!text.trim())return;const value=text;setText("");const result=await platformRequest<{message:WorkspaceMessage;reply:WorkspaceMessage}>(`/conversations/${active}/messages`,"POST",{content:value});setMessages(x=>[...x,result.message,result.reply]);}if(!active)return <section className="empty-workspace"><div className="empty-symbol">✦</div><h1>今天想学习什么？</h1><p>无需注册。连接你自己的模型，或先创建课程知识库和本地复习资料。</p><div className="empty-actions"><button onClick={onCreate}>新建对话</button><button className="secondary" onClick={onSettings}>立即配置 AI</button></div></section>;return <section className="chat-workspace"><div className="message-stream">{messages.map(m=><article key={m.id} className={`message ${m.role}`}><span>{m.role==="user"?"你":"AI"}</span><p>{m.content}</p></article>)}</div><div className="composer"><textarea value={text} onChange={e=>setText(e.target.value)} placeholder="询问课程内容，或描述你的学习目标…"/><button onClick={send}>↑</button><small>未配置模型时不会报错；本地知识库与复习功能仍可使用。</small></div></section>}
-function Courses({courses,setCourses}:{courses:Course[];setCourses:React.Dispatch<React.SetStateAction<Course[]>>}){const[name,setName]=useState("");const[status,setStatus]=useState("");async function create(){if(!name.trim())return;const x=await platformRequest<Course>("/courses","POST",{name,description:"",exam_date:""});setCourses(v=>[x,...v]);setName("")}async function upload(c:Course,file?:File){if(!file)return;setStatus(`正在解析 ${file.name}…`);const x=await platformUpload<{chunks:number}>(`/courses/${c.id}/files`,file);setStatus(`已建立 ${x.chunks} 个可引用知识块`)}return <section className="module-page"><div className="module-heading"><div><small>COURSE SPACES</small><h1>课程空间</h1><p>上传课件、教材、笔记和往年题，建立本地知识库。</p></div><div className="inline-create"><input value={name} onChange={e=>setName(e.target.value)} placeholder="课程名称"/><button onClick={create}>创建课程</button></div></div>{status&&<div className="index-status">{status}</div>}<div className="course-grid">{courses.map(c=><article key={c.id}><div className="course-color"/><small>本地课程</small><h3>{c.name}</h3><p>{c.description||"资料仅保存在当前工作空间"}</p><label className="file-action">上传并建立索引<input type="file" accept=".pdf,.pptx,.docx,.md,.txt,.png,.jpg,.jpeg" onChange={e=>upload(c,e.target.files?.[0])}/></label><footer><span>真实引用</span><span>本地存储</span></footer></article>)}</div></section>}
-function Agent({courses}:{courses:Course[]}){const[goal,setGoal]=useState("");const[tasks,setTasks]=useState<Array<{id:string;goal:string;status:string}>>([]);useEffect(()=>{platformRequest<typeof tasks>("/agent/tasks").then(setTasks)},[]);async function add(){if(!goal.trim())return;const x=await platformRequest<(typeof tasks)[number]>("/agent/tasks","POST",{goal,course_id:courses[0]?.id||null});setTasks(v=>[x,...v]);setGoal("")}return <section className="module-page"><div className="module-heading"><div><small>LEARNING AGENT</small><h1>Agent 任务</h1><p>把学习目标拆成可追踪步骤，高风险工具默认关闭。</p></div></div><div className="agent-create"><textarea value={goal} onChange={e=>setGoal(e.target.value)} placeholder="例如：七天内完成概率论冲刺"/><button onClick={add}>制定计划</button></div>{tasks.map(x=><article className="task-row" key={x.id}><span className="status-dot"/><div><strong>{x.goal}</strong><small>{x.status}</small></div></article>)}</section>}
-function Memory({courses}:{courses:Course[]}){const[value,setValue]=useState("");const[items,setItems]=useState<Array<{id:string;content:string;kind:string}>>([]);useEffect(()=>{platformRequest<typeof items>("/memory").then(setItems)},[]);async function add(){if(!value.trim())return;const x=await platformRequest<(typeof items)[number]>("/memory","POST",{content:value,kind:"study_preference",course_id:courses[0]?.id||null});setItems(v=>[x,...v]);setValue("")}return <section className="module-page"><div className="module-heading"><div><small>MEMORY CENTER</small><h1>记忆中心</h1><p>显式管理本地学习偏好。</p></div></div><div className="inline-create"><input value={value} onChange={e=>setValue(e.target.value)} placeholder="例如：我适合先看例题"/><button onClick={add}>保存</button></div>{items.map(x=><article className="memory-row" key={x.id}><small>{x.kind}</small><p>{x.content}</p></article>)}</section>}
-function Settings(){const saved=JSON.parse(localStorage.getItem("campus-ai-model")||"null") as LLMConfig|null;const[config,setConfig]=useState<LLMConfig>(saved||{enabled:true,provider:"deepseek",api_key:"",base_url:"https://api.deepseek.com",model:"deepseek-chat"});const[result,setResult]=useState("");function update(key:keyof LLMConfig,value:string){setConfig(x=>({...x,[key]:value}))}function save(){localStorage.setItem("campus-ai-model",JSON.stringify(config));setResult("配置仅保存在当前浏览器。")}async function test(){if(!config.api_key){setResult("请先填写 API Key。");return}setResult("正在由浏览器直接测试连接…");const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);try{const response=await fetch(`${(config.base_url||"").replace(/\/$/,"")}/models`,{headers:{Authorization:`Bearer ${config.api_key}`},signal:controller.signal});if(response.ok)setResult("连接成功。Key 未经过 Campus AI Workspace 后端。");else if(response.status===401||response.status===403)setResult("Key 错误或无权限。");else if(response.status===404)setResult("接口或模型服务地址不存在。");else setResult(`服务返回错误（${response.status}）。`)}catch(error){setResult(error instanceof DOMException&&error.name==="AbortError"?"连接超时。":"网络错误或供应商不允许浏览器跨域访问；Key 未上传到本项目服务器。") }finally{clearTimeout(timer)}}function clear(){if(confirm("确认清空本地工作空间？此操作不可撤销。"))platformRequest("/workspace","DELETE").then(()=>location.reload())}return <section className="module-page settings-page"><div className="module-heading"><div><small>LOCAL & BYOK</small><h1>设置</h1><p>开发者不提供统一模型额度。API Key 只保存在当前浏览器。</p></div></div><section className="settings-section"><h2>AI 模型配置</h2><label>供应商<select value={config.provider||"deepseek"} onChange={e=>update("provider",e.target.value)}><option value="deepseek">DeepSeek</option><option value="openai_compatible">OpenAI Compatible</option><option value="openai">OpenAI</option><option value="claude_compatible">Claude Compatible</option></select></label><label>API Key<input type="password" value={config.api_key||""} onChange={e=>update("api_key",e.target.value)} autoComplete="off"/></label><label>Base URL<input value={config.base_url||""} onChange={e=>update("base_url",e.target.value)}/></label><label>模型名称<input value={config.model||""} onChange={e=>update("model",e.target.value)}/></label><div className="setting-actions"><button onClick={save}>保存到本地</button><button className="secondary" onClick={test}>测试连接</button></div>{result&&<p className="setting-result">{result}</p>}</section><section className="settings-section"><h2>数据管理</h2><p>导出文件不包含 API Key。导入功能将在校验格式后开放。</p><div className="setting-actions"><a className="button-link" href="/api/v1/workspace/export">导出工作空间</a><button className="danger" onClick={clear}>清空本地数据</button></div></section></section>}
-function Empty({title,text}:{title:string;text:string}){return <section className="empty-workspace"><div className="empty-symbol">◇</div><h1>{title}</h1><p>{text}</p></section>}
+function Settings({ form, setForm, llm, setLlm, onCreate, onSave, onTest }: any) {
+  const update = (key: string, value: unknown) => setForm((current: any) => ({ ...current, [key]: value }));
+  const updateLlm = (key: string, value: unknown) => setLlm((current: any) => ({ ...current, [key]: value }));
+  return <section className="review-page"><p className="eyebrow">创建复习项目</p><h1>把杂乱课程资料，变成真正能用来复习、刷题和冲刺的资料包。</h1>
+    <div className="form-grid"><label>课程名称<input value={form.course_name} onChange={(event) => update("course_name", event.target.value)} placeholder="例如：概率论" /></label><label>考试日期<input type="date" value={form.exam_date} onChange={(event) => update("exam_date", event.target.value)} /></label><label>考试形式<select value={form.exam_type} onChange={(event) => update("exam_type", event.target.value)}><option value="unknown">暂不确定</option><option value="closed_book">闭卷笔试</option><option value="open_book">开卷笔试</option><option value="programming">编程考试</option><option value="lab_exam">实验考试</option><option value="essay_based">简答论述为主</option><option value="mixed">混合考试</option></select></label><label>每日复习时间（分钟）<input type="number" value={form.daily_minutes} onChange={(event) => update("daily_minutes", Number(event.target.value))} /></label><label>当前掌握程度<select value={form.mastery_level} onChange={(event) => update("mastery_level", event.target.value)}><option value="none">几乎没学</option><option value="weak">基础薄弱</option><option value="forgotten">学过但忘得较多</option><option value="solid">基本掌握</option><option value="sprint">主要需要冲刺</option></select></label><label>目标成绩<input value={form.target_score} onChange={(event) => update("target_score", event.target.value)} placeholder="例如：85+" /></label></div>
+    <label className="wide-field">希望重点提升的方面<textarea value={form.focus} onChange={(event) => update("focus", event.target.value)} placeholder="例如：计算题、论述题、背诵效率" /></label>
+    <section className="byok"><h2>你的 AI 模型</h2><p>推荐配置自己的模型以获得更自然的专题重组、往年题分析、模拟卷和 Anki。API Key 默认只保存在当前浏览器，不写入数据库、日志或 GitHub。</p><div className="form-grid"><label>供应商<select value={llm.provider || "deepseek"} onChange={(event) => updateLlm("provider", event.target.value)}><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="openai_compatible">OpenAI-compatible</option></select></label><label>模型名称<input value={llm.model || ""} onChange={(event) => updateLlm("model", event.target.value)} placeholder="填写你可用的模型名称" /></label><label>Base URL<input value={llm.base_url || ""} onChange={(event) => updateLlm("base_url", event.target.value)} placeholder="https://api.deepseek.com" /></label><label>API Key<input type="password" value={llm.api_key || ""} onChange={(event) => updateLlm("api_key", event.target.value)} autoComplete="off" /></label></div><button onClick={onSave}>保存到当前浏览器</button><button className="secondary" onClick={onTest}>测试连接</button></section>
+    <button className="primary" disabled={!form.course_name.trim()} onClick={onCreate}>创建复习项目</button>
+  </section>;
+}
+
+function Materials({ files, setFiles, uploaded, roles, setRoles, onUpload, onDiagnose }: any) {
+  return <section className="review-page"><p className="eyebrow">上传与标记资料</p><h1>每类资料有不同作用，不会被粗暴拼接。</h1><input type="file" multiple accept=".pdf,.pptx,.docx,.md,.txt,.png,.jpg,.jpeg" onChange={(event) => setFiles(Array.from(event.target.files || []))} />{files.length > 0 && uploaded.length === 0 && <button className="primary" onClick={onUpload}>上传 {files.length} 份资料</button>}{uploaded.map((file: any) => <div className="file-row" key={file.saved_filename}><strong>{file.original_filename}</strong><select value={roles[file.saved_filename] || "other"} onChange={(event) => setRoles((current: any) => ({ ...current, [file.saved_filename]: event.target.value }))}>{materialRoles.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>)}{uploaded.length > 0 && <button className="primary" onClick={onDiagnose}>生成资料诊断</button>}</section>;
+}
+
+function Diagnosis({ diagnosis, onGenerate }: any) {
+  if (!diagnosis) return <section className="review-page"><h1>等待资料诊断</h1></section>;
+  return <section className="review-page"><p className="eyebrow">复习诊断</p><h1>先确认资料质量和生成策略。</h1><div className="diagnosis-score">资料完整度 <strong>{diagnosis.material_completeness}/100</strong></div><div className="diagnosis-grid"><article><h3>已有资料</h3><p>已处理 {diagnosis.files_processed} 份文件</p><p>{diagnosis.roles.join("、") || "未识别角色"}</p></article><article><h3>资料缺口</h3>{diagnosis.missing.map((item: string) => <p key={item}>{item}</p>)}</article><article><h3>推荐策略</h3>{diagnosis.recommended_strategy.map((item: string) => <p key={item}>{item}</p>)}</article></div><button className="primary" onClick={onGenerate}>确认并开始分模块生成</button></section>;
+}
+
+function Progress({ job }: any) {
+  const modules = ["资料诊断", "重点地图", "核心讲义", "往年题分析", "题型攻略", "模拟试卷", "Anki 卡片", "冲刺计划"];
+  return <section className="review-page"><p className="eyebrow">生成进度</p><h1>{job?.message || "正在准备任务"}</h1><progress value={job?.progress || 0} max="100" /><p>{job?.progress || 0}%</p><div className="module-status">{modules.map((item, index) => <div key={item}>{index < (job?.progress || 0) / 13 ? "✓" : "○"} {item}</div>)}</div></section>;
+}
+
+function guessRole(filename: string): MaterialRole {
+  const text = filename.toLowerCase();
+  if (/试卷|真题|历年|期末|exam|past/.test(text)) return "past_exam";
+  if (/答案|解析|answer|solution/.test(text)) return "answer_key";
+  if (/纲要|范围|大纲|syllabus/.test(text)) return "syllabus";
+  if (/笔记|note/.test(text)) return "notes";
+  if (/教材|textbook/.test(text)) return "textbook";
+  if (/错题|wrong/.test(text)) return "mistakes";
+  if (/课件|slide|ppt/.test(text)) return "slides";
+  return "other";
+}

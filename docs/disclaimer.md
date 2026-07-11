@@ -1,11 +1,3 @@
-# Disclaimer
+# 免责声明
 
-CampusForge is a study and review aid. It is not an official course authority, grading tool, or exam prediction service.
-
-- Generated content may be incomplete or incorrect.
-- The project does not guarantee exam coverage, score improvement, or prediction accuracy.
-- Users should verify generated material against official course slides, textbooks, instructor requirements, and school policies.
-- Do not use CampusForge to cheat, leak restricted exam content, bypass academic rules, or process materials without permission.
-- Public deployments should add rate limiting, access control, monitoring, and cost controls before opening the service broadly.
-
-Self-hosters are responsible for server costs, LLM API costs, data handling, and legal compliance.
+ExamForge AI 的内容仅用于学习和复习辅助，不保证生成内容完全正确、不承诺押题或提分。用户应核对原始课程资料和教师要求，不得将本项目用于作弊、泄露考试内容或处理无权使用的资料。

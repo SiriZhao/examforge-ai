@@ -1,46 +1,9 @@
-# Security Notes
+# 安全说明
 
-CampusForge handles uploaded learning materials, generated reports, and optional LLM API credentials. Treat public deployments as data-processing services.
+ExamForge AI 不要求注册。每个匿名工作空间使用随机 UUID 与工作空间密钥隔离；项目、报告和模块接口均验证工作空间归属。
 
-## Secrets
-
-- Do not commit `.env`, API keys, tokens, cookies, or private credentials.
-- Use `.env.example` only as a placeholder reference.
-- In cloud deployments, configure server-side keys through the hosting provider's secret manager.
-- Health endpoints must only expose whether an LLM provider is configured, not the key itself.
-
-## Uploads
-
-- Only allow supported document and image types.
-- Reject executable files, scripts, archives, and unknown extensions.
-- Sanitize filenames before saving.
-- Keep uploads inside the configured upload directory.
-- Do not expose server paths in user-facing errors.
-
-## Downloads
-
-- Cloud downloads should use job-scoped URLs.
-- Do not let users pass arbitrary filesystem paths.
-- Use safe `Content-Disposition` filenames for exported files.
-
-## Logging
-
-- Do not log API keys, authorization headers, full uploaded documents, full generated reports, cookies, sessions, or environment variables.
-- If debugging LLM responses, log only a short preview and redact likely secrets.
-
-## Public Deployments
-
-Before opening a public instance, add or configure:
-
-- HTTPS
-- access control or login
-- rate limiting
-- file size limits
-- job timeouts
-- temporary file cleanup
-- API cost monitoring
-- abuse prevention
-
-## Local Desktop Use
-
-The Windows desktop app is the safer choice for private or institution-restricted materials because files stay on the user's machine unless the user enables an external LLM provider.
+- 只接受 PDF、PPTX、DOCX、Markdown、TXT、PNG、JPG 和 JPEG。
+- 上传文件保存于受控运行目录，文件名会安全化，下载不接受任意路径。
+- API Key 不写入数据库、日志或仓库。浏览器保存由用户自行选择，生产网页必须使用 HTTPS。
+- 错误响应不应返回服务器路径或 traceback；LLM 调试日志只允许短预览并应脱敏。
+- 云端部署请配置允许来源、上传大小、文件数量、任务超时和临时文件 TTL，并按需要增加限流。

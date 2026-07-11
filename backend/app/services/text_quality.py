@@ -120,7 +120,7 @@ def safe_download_stem(course_name: str | None, suffix: str) -> str:
     base = re.sub(f"[{re.escape(WINDOWS_FORBIDDEN_FILENAME_CHARS)}]", "", base)
     base = re.sub(r"\s+", "_", base).strip("._ ")
     if not base:
-        base = "CampusForge"
+        base = "ExamForgeAI"
     base = base[:60].strip("._ ")
     return f"{base}_{suffix}"
 

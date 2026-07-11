@@ -1,4 +1,4 @@
-app = "campusforge"
+app = "examforge-ai"
 primary_region = "nrt"
 
 [build]
@@ -6,19 +6,20 @@ primary_region = "nrt"
 
 [env]
   APP_MODE = "cloud"
-  APP_NAME = "CampusForge"
-  APP_VERSION = "0.5.1"
+  APP_NAME = "ExamForge AI"
+  APP_VERSION = "0.6.0"
   PORT = "8000"
   MAX_UPLOAD_MB = "50"
   MAX_FILES_PER_REQUEST = "10"
   JOB_TIMEOUT_SECONDS = "600"
   TEMP_FILE_TTL_HOURS = "24"
   DEFAULT_LLM_PROVIDER = "deepseek"
-  DEFAULT_LLM_MODEL = "deepseek-v4-flash"
+  DEFAULT_LLM_MODEL = ""
   DEFAULT_LLM_BASE_URL = "https://api.deepseek.com"
   ENABLE_RAPIDOCR = "true"
   ENABLE_TESSERACT = "false"
   ENABLE_CLOUD_SAFE_MODE = "true"
+  ENABLE_SERVER_LLM_KEY = "false"
 
 [http_service]
   internal_port = 8000

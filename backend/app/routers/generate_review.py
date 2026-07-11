@@ -43,6 +43,8 @@ def download_url(filename: str) -> str:
 
 
 def with_server_default_llm(config):
+    if not settings.enable_server_llm_key:
+        return config
     if config.api_key:
         return config
     provider = config.provider or settings.default_llm_provider

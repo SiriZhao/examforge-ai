@@ -4,12 +4,12 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - campus_workspace:/data
+      - examforge_workspace:/data
     environment:
       APP_MODE: cloud
-      APP_NAME: Campus AI Workspace
-      APP_VERSION: 0.5.1
-      DATABASE_URL: sqlite:////data/workspace.db
+      APP_NAME: ExamForge AI
+      APP_VERSION: 0.6.0
+      DATABASE_URL: sqlite:////data/examforge_workspace.db
       STORAGE_DIR: /data
       UPLOAD_DIR: uploads
       OUTPUT_DIR: outputs
@@ -18,4 +18,4 @@ services:
       ENABLE_PYTHON_TOOL: "false"
 
 volumes:
-  campus_workspace:
+  examforge_workspace:

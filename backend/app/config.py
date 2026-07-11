@@ -6,12 +6,12 @@ from typing import Literal
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-APP_VERSION = "0.5.1"
+APP_VERSION = "0.6.0"
 AppMode = Literal["local_dev", "desktop", "cloud"]
 
 
 class Settings(BaseSettings):
-    app_name: str = "Campus AI Workspace"
+    app_name: str = "ExamForge AI"
     app_version: str = APP_VERSION
     app_mode: AppMode = Field(default="local_dev", validation_alias=AliasChoices("APP_MODE", "ERA_APP_MODE"))
     public_base_url: str = Field(default="", validation_alias=AliasChoices("PUBLIC_BASE_URL", "ERA_PUBLIC_BASE_URL"))
@@ -32,8 +32,9 @@ class Settings(BaseSettings):
     enable_rapidocr: bool = Field(default=True, validation_alias=AliasChoices("ENABLE_RAPIDOCR", "ERA_ENABLE_RAPIDOCR"))
     enable_tesseract: bool = Field(default=False, validation_alias=AliasChoices("ENABLE_TESSERACT", "ERA_ENABLE_TESSERACT"))
     enable_cloud_safe_mode: bool = Field(default=False, validation_alias=AliasChoices("ENABLE_CLOUD_SAFE_MODE", "ERA_ENABLE_CLOUD_SAFE_MODE"))
+    enable_server_llm_key: bool = Field(default=False, validation_alias=AliasChoices("ENABLE_SERVER_LLM_KEY"))
     default_llm_provider: str = Field(default="deepseek", validation_alias=AliasChoices("DEFAULT_LLM_PROVIDER", "ERA_DEFAULT_LLM_PROVIDER"))
-    default_llm_model: str = Field(default="deepseek-v4-flash", validation_alias=AliasChoices("DEFAULT_LLM_MODEL", "ERA_DEFAULT_LLM_MODEL"))
+    default_llm_model: str = Field(default="", validation_alias=AliasChoices("DEFAULT_LLM_MODEL", "ERA_DEFAULT_LLM_MODEL"))
     default_llm_base_url: str = Field(default="https://api.deepseek.com", validation_alias=AliasChoices("DEFAULT_LLM_BASE_URL", "ERA_DEFAULT_LLM_BASE_URL"))
     deepseek_api_key: str = Field(default="", validation_alias=AliasChoices("DEEPSEEK_API_KEY", "ERA_DEEPSEEK_API_KEY"))
     openai_api_key: str = Field(default="", validation_alias=AliasChoices("OPENAI_API_KEY", "ERA_OPENAI_API_KEY"))
@@ -41,7 +42,6 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./workspace.db", validation_alias=AliasChoices("DATABASE_URL"))
     redis_url: str = Field(default="", validation_alias=AliasChoices("REDIS_URL"))
     enable_python_tool: bool = Field(default=False, validation_alias=AliasChoices("ENABLE_PYTHON_TOOL"))
-    free_daily_messages: int = Field(default=20, validation_alias=AliasChoices("FREE_DAILY_MESSAGES"))
     llm_context_budget_chars: int = Field(default=120000, validation_alias=AliasChoices("LLM_CONTEXT_BUDGET_CHARS", "ERA_LLM_CONTEXT_BUDGET_CHARS"))
     llm_chunk_chars: int = Field(default=18000, validation_alias=AliasChoices("LLM_CHUNK_CHARS", "ERA_LLM_CHUNK_CHARS"))
     llm_chunk_overlap_chars: int = Field(default=1200, validation_alias=AliasChoices("LLM_CHUNK_OVERLAP_CHARS", "ERA_LLM_CHUNK_OVERLAP_CHARS"))
