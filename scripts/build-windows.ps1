@@ -14,7 +14,7 @@ $pythonExe = Join-Path $backendVenv "Scripts\python.exe"
 $distDir = Join-Path $root "dist"
 $buildDir = Join-Path $root "build"
 $installerOut = Join-Path $distDir "installer"
-$appVersion = "0.4.1"
+$appVersion = "0.5.0"
 
 function Step {
     param([string]$Message)
@@ -44,19 +44,19 @@ function Find-InnoCompiler {
     return $null
 }
 
-function Stop-RunningExamForge {
-    $running = Get-Process -Name "ExamForgeAI" -ErrorAction SilentlyContinue
+function Stop-RunningCampusForge {
+    $running = @(Get-Process -Name "CampusForge" -ErrorAction SilentlyContinue) + @(Get-Process -Name "ExamForgeAI" -ErrorAction SilentlyContinue)
     $uvicorn = Get-Process -Name "uvicorn" -ErrorAction SilentlyContinue
     $processes = @($running) + @($uvicorn)
     $processes = $processes | Where-Object { $_ }
     if (-not $processes) { return }
 
-    Write-Host "ExamForge AI related processes are running. Attempting to stop them before rebuilding..." -ForegroundColor Yellow
+    Write-Host "CampusForge related processes are running. Attempting to stop them before rebuilding..." -ForegroundColor Yellow
     foreach ($process in $processes) {
         try {
             Stop-Process -Id $process.Id -Force -ErrorAction Stop
         } catch {
-            throw "A running ExamForge AI process could not be stopped. Please close ExamForge AI and rerun scripts\build-windows.ps1."
+            throw "A running CampusForge process could not be stopped. Please close CampusForge and rerun scripts\build-windows.ps1."
         }
     }
     Start-Sleep -Seconds 1
@@ -65,7 +65,7 @@ function Stop-RunningExamForge {
 Push-Location $root
 try {
     Step "Clean old build artifacts"
-    Stop-RunningExamForge
+    Stop-RunningCampusForge
     if (Test-Path $distDir) { Remove-Item -LiteralPath $distDir -Recurse -Force }
     if (Test-Path $buildDir) { Remove-Item -LiteralPath $buildDir -Recurse -Force }
     New-Item -ItemType Directory -Path $installerOut -Force | Out-Null
@@ -118,9 +118,9 @@ try {
     }
 
     Step "Build Windows executable with PyInstaller"
-    & $pythonExe -m PyInstaller ExamForgeAI.spec --clean --noconfirm
+    & $pythonExe -m PyInstaller CampusForge.spec --clean --noconfirm
 
-    $exePath = Join-Path $distDir "ExamForgeAI.exe"
+    $exePath = Join-Path $distDir "CampusForge.exe"
     if (-not (Test-Path $exePath)) {
         throw "PyInstaller did not produce $exePath"
     }
@@ -134,7 +134,7 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 throw "Inno Setup failed with exit code $LASTEXITCODE."
             }
-            $setupPath = Join-Path $installerOut "ExamForgeAISetup-$appVersion.exe"
+            $setupPath = Join-Path $installerOut "CampusForgeSetup-$appVersion.exe"
             if (Test-Path $setupPath) {
                 Write-Host "Installer: $setupPath" -ForegroundColor Green
             } else {
@@ -142,14 +142,14 @@ try {
             }
         } else {
             Write-Host "Inno Setup compiler was not found. Skipping installer build." -ForegroundColor Yellow
-            Write-Host "Install Inno Setup 6 and rerun this script to create dist\installer\ExamForgeAISetup-$appVersion.exe."
+            Write-Host "Install Inno Setup 6 and rerun this script to create dist\installer\CampusForgeSetup-$appVersion.exe."
         }
     }
 
     Write-Host ""
     Write-Host "Windows packaging completed." -ForegroundColor Green
-    Write-Host "EXE: dist\ExamForgeAI.exe"
-    Write-Host "Installer: dist\installer\ExamForgeAISetup-$appVersion.exe"
+    Write-Host "EXE: dist\CampusForge.exe"
+    Write-Host "Installer: dist\installer\CampusForgeSetup-$appVersion.exe"
 } finally {
     Pop-Location
 }

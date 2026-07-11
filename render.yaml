@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: examforge-ai
+    name: campusforge
     env: docker
     plan: starter
     dockerfilePath: ./Dockerfile
@@ -8,6 +8,10 @@ services:
     envVars:
       - key: APP_MODE
         value: cloud
+      - key: APP_NAME
+        value: CampusForge
+      - key: APP_VERSION
+        value: 0.5.0
       - key: MAX_UPLOAD_MB
         value: "50"
       - key: MAX_FILES_PER_REQUEST

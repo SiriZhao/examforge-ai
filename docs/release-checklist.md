@@ -6,7 +6,7 @@ Use this checklist before publishing a release.
 
 - `cd frontend && npm install && npm run build && npm run test -- --run`
 - `cd backend && python -m pip install -r requirements.txt && python -m pytest`
-- `docker build -t examforge-ai:0.4.1 .`
+- `docker build -t examforge-ai:0.5.0 .`
 - `.\scripts\build-windows.ps1`
 
 ## Security
@@ -33,6 +33,6 @@ Do not commit:
 ## Release
 
 1. Commit and push source changes.
-2. Tag the release, for example `v0.4.1`.
-3. Upload `dist/ExamForgeAI.exe` and, if available, `dist/installer/ExamForgeAISetup-0.4.1.exe` to GitHub Releases.
+2. Tag the release, for example `v0.5.0`.
+3. Upload `dist/CampusForge.exe` and, if available, `dist/installer/CampusForgeSetup-0.5.0.exe` to GitHub Releases.
 4. Do not claim deployment or release success unless the command actually succeeds.

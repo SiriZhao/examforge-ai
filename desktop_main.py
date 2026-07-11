@@ -12,8 +12,8 @@ from pathlib import Path
 import uvicorn
 
 
-APP_NAME = "ExamForgeAI"
-DISPLAY_NAME = "ExamForge AI"
+APP_NAME = "CampusForge"
+DISPLAY_NAME = "CampusForge"
 
 
 def resource_path(*parts: str) -> Path:
@@ -130,7 +130,7 @@ def main() -> None:
         logger.error("Desktop startup failed: %s", exc)
         logger.error(traceback.format_exc())
         show_failure_message(
-            "ExamForge AI failed to start. Please check the log file or reinstall the app.",
+            "CampusForge failed to start. Please check the log file or reinstall the app.",
             log_path,
         )
         raise

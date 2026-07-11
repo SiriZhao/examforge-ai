@@ -20,7 +20,7 @@ import {
 import { ChatPanel } from "./components/ChatPanel";
 import { ReportView } from "./components/ReportView";
 
-const ACCEPTED_EXTENSIONS = [".pptx", ".pdf", ".docx", ".md", ".png", ".jpg", ".jpeg"];
+const ACCEPTED_EXTENSIONS = [".pptx", ".pdf", ".docx", ".md", ".txt", ".png", ".jpg", ".jpeg"];
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const AUTHOR_URL = "https://github.com/SiriZhao";
 
@@ -175,7 +175,7 @@ export default function App() {
   }
 
   function saveLLMConfig() {
-    window.localStorage.setItem("examforge-llm-config", JSON.stringify(normalizeLlmConfig(llmConfig)));
+    window.localStorage.setItem("campusforge-llm-config", JSON.stringify(normalizeLlmConfig(llmConfig)));
     setConfigSaved(true);
     window.setTimeout(() => setConfigSaved(false), 3000);
   }
@@ -304,12 +304,12 @@ export default function App() {
       <header className="hero">
         <div className="hero-copy">
           <p className="brand-line">
-            <strong>ExamForge AI</strong>
+            <strong>CampusForge</strong>
             <span>期末复习资料生成器</span>
           </p>
           <h1>把杂乱的课程资料，整理成可直接复习的冲刺资料包</h1>
           <p className="intro">
-            上传课件、笔记、教材、扫描试卷和往年题，ExamForge AI 会自动提取重点、分析高频考点、生成模拟卷、Anki 卡片和考前冲刺计划。
+            上传课件、笔记、教材、扫描试卷和往年题，CampusForge 会自动提取重点、分析高频考点、生成模拟卷、Anki 卡片和考前冲刺计划。
           </p>
           <div className="hero-tags" aria-label="产品亮点">
             <span>无需 API Key 也可使用</span>
@@ -385,7 +385,7 @@ export default function App() {
           <div className="quality-guide info-box">
             <strong>为什么不直接发给大模型？</strong>
             <p>
-              ExamForge AI 会先完成 OCR、文件解析、往年题线索提取、多文件证据整合和质量校验，
+              CampusForge 会先完成 OCR、文件解析、往年题线索提取、多文件证据整合和质量校验，
               再让大模型进行深度整理，并最终导出 Word、PDF、Markdown 和 Anki CSV。
               它不是普通聊天，而是一条完整的期末复习资料生产线。
             </p>
@@ -665,18 +665,18 @@ function ProgressBar({ value, label, step, failed }: { value: number; label: str
 function AboutDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <section className="about-dialog" role="dialog" aria-modal="true" aria-label="关于 ExamForge AI" onClick={(event) => event.stopPropagation()}>
+      <section className="about-dialog" role="dialog" aria-modal="true" aria-label="关于 CampusForge" onClick={(event) => event.stopPropagation()}>
         <div className="section-header compact">
           <h2>关于</h2>
           <button type="button" className="secondary" onClick={onClose}>关闭</button>
         </div>
         <dl className="about-list">
-          <div><dt>产品名称</dt><dd>ExamForge AI</dd></div>
+          <div><dt>产品名称</dt><dd>CampusForge</dd></div>
           <div><dt>中文名称</dt><dd>期末复习资料生成器</dd></div>
           <div><dt>作者</dt><dd>SiriZhao</dd></div>
           <div><dt>GitHub</dt><dd><a href={AUTHOR_URL} target="_blank" rel="noreferrer">https://github.com/SiriZhao</a></dd></div>
         </dl>
-        <p className="summary">一个面向大学生期末复习场景的本地 AI 复习资料生成工具，可将课件、教材、笔记、扫描试卷和往年题整理为复习资料包、模拟卷和记忆卡片。</p>
+        <p className="summary">一个面向大学生学习与校园效率场景的 AI SaaS，可将课件、教材、笔记、扫描试卷和往年题整理为复习资料包、模拟卷和记忆卡片。</p>
       </section>
     </div>
   );

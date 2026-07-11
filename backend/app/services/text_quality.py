@@ -120,7 +120,7 @@ def safe_download_stem(course_name: str | None, suffix: str) -> str:
     base = re.sub(f"[{re.escape(WINDOWS_FORBIDDEN_FILENAME_CHARS)}]", "", base)
     base = re.sub(r"\s+", "_", base).strip("._ ")
     if not base:
-        base = "ExamForgeAI"
+        base = "CampusForge"
     base = base[:60].strip("._ ")
     return f"{base}_{suffix}"
 
@@ -131,6 +131,6 @@ def safe_download_filename(course_name: str | None, suffix: str, ext: str) -> st
 
 
 def content_disposition_header(filename: str) -> str:
-    fallback = filename.encode("ascii", "ignore").decode("ascii") or "ExamForgeAI_download"
+    fallback = filename.encode("ascii", "ignore").decode("ascii") or "CampusForge_download"
     fallback = fallback.replace('"', "")
     return f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(filename)}'

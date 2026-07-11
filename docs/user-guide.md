@@ -1,8 +1,8 @@
-# ExamForge AI User Guide
+# CampusForge User Guide
 
 ## Web App
 
-1. Open the deployed ExamForge AI URL.
+1. Open the deployed CampusForge URL.
 2. Enter a course or exam name.
 3. Upload courseware, textbooks, notes, past exams, scanned PDFs, images, Markdown, TXT, DOCX, or PPTX files.
 4. Choose study goal, exam type, OCR mode, detail level, and output style.
@@ -13,7 +13,7 @@
 
 ## Long Materials
 
-For large PDFs or many files, ExamForge AI automatically switches to chunked LLM processing. It extracts chunk insights first, then synthesizes a final report. If the model still reports `CONTEXT_TOO_LONG`, the system retries with a compact evidence pack before falling back to the local safe draft.
+For large PDFs or many files, CampusForge automatically switches to chunked LLM processing. It extracts chunk insights first, then synthesizes a final report. If the model still reports `CONTEXT_TOO_LONG`, the system retries with a compact evidence pack before falling back to the local safe draft.
 
 ## API Key Options
 

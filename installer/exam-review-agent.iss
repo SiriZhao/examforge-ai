@@ -1,10 +1,10 @@
-#define MyAppName "ExamForge AI"
-#define MyShortcutName "ExamForge AI"
-#define MyAppVersion "0.4.1"
+#define MyAppName "CampusForge"
+#define MyShortcutName "CampusForge"
+#define MyAppVersion "0.5.0"
 #define MyAppPublisher "SiriZhao"
 #define MyAppURL "https://github.com/SiriZhao/examforge-ai"
-#define MyAppExeName "ExamForgeAI.exe"
-#define MyUserDataDir "{localappdata}\ExamForgeAI"
+#define MyAppExeName "CampusForge.exe"
+#define MyUserDataDir "{localappdata}\CampusForge"
 
 [Setup]
 AppId={{D92F62E9-DBBA-43D2-856A-8F1B3C8BB7A7}
@@ -16,13 +16,13 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription=ExamForge AI review pack generator
+VersionInfoDescription=CampusForge AI study SaaS desktop client
 VersionInfoCopyright=Copyright 2026 SiriZhao
-DefaultDirName={localappdata}\Programs\ExamForge AI
+DefaultDirName={localappdata}\Programs\CampusForge
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
-OutputBaseFilename=ExamForgeAISetup-0.4.1
+OutputBaseFilename=CampusForgeSetup-0.5.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -51,7 +51,7 @@ begin
   if CurUninstallStep = usPostUninstall then
   begin
     MsgBox(
-      'ExamForge AI has been uninstalled.' + #13#10 + #13#10 +
+      'CampusForge has been uninstalled.' + #13#10 + #13#10 +
       'Local uploads, exports, logs, and caches may remain in:' + #13#10 +
       ExpandConstant('{#MyUserDataDir}') + #13#10 + #13#10 +
       'Delete that folder manually if you no longer need the data.',

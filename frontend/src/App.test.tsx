@@ -103,7 +103,7 @@ describe("App", () => {
   it("首页可渲染，并默认使用 DeepSeek deepseek-v4-flash", () => {
     render(<App />);
 
-    expect(screen.getByText("ExamForge AI")).toBeInTheDocument();
+    expect(screen.getByText("CampusForge")).toBeInTheDocument();
     fireEvent.click(screen.getAllByText(/高级设置|楂樼骇璁剧疆/)[0]);
     expect(screen.getByDisplayValue("deepseek-v4-flash")).toBeInTheDocument();
   });

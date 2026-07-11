@@ -1,4 +1,4 @@
-# ExamForge AI Demo Output
+# CampusForge Demo Output
 
 > Fictional generated review pack based on `demo_course_material.md` and `demo_past_exam.md`.
 

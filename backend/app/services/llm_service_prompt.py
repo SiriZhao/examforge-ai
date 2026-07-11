@@ -74,7 +74,7 @@ def build_review_prompt(
 输出风格：{output_style}
 风格策略：{style_instruction}
 
-v0.4.1 输出要求：
+v0.5.0 输出要求：
 - 报告必须体现复习目标和考试类型差异。
 - question_types 需要包含 name、confidence、evidence、evidence_sources、features、related_topics、answer_strategy、sample_questions、practice_suggestions、is_from_past_exam。
 - mock_exam.questions 每题需要 question_type/type、difficulty、question、options、answer、explanation、related_topic、source_hint、source_basis。

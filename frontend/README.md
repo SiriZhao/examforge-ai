@@ -1,6 +1,6 @@
-# ExamForge AI 前端
+# CampusForge 前端
 
-这是 ExamForge AI｜期末复习资料生成器的 React + Vite 前端。
+这是 CampusForge｜期末复习资料生成器的 React + Vite 前端。
 
 ## 启动
 

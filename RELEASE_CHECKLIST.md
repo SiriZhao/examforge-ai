@@ -1,4 +1,4 @@
-# ExamForge AI Release Checklist
+# CampusForge Release Checklist
 
 Use this checklist before making the repository public, pushing a release tag, or publishing a Windows installer.
 
@@ -68,15 +68,15 @@ cd ..
 
 ## 4. Packaging Check
 
-- [ ] `dist/ExamForgeAI.exe` exists.
-- [ ] `dist/ExamForgeAI.exe` can start without Python or Node.js installed on the target machine.
-- [ ] `dist/installer/ExamForgeAISetup-0.4.1.exe` exists.
-- [ ] Installer can install ExamForge AI into the current user's app directory.
+- [ ] `dist/CampusForge.exe` exists.
+- [ ] `dist/CampusForge.exe` can start without Python or Node.js installed on the target machine.
+- [ ] `dist/installer/CampusForgeSetup-0.5.0.exe` exists.
+- [ ] Installer can install CampusForge into the current user's app directory.
 - [ ] Installed app starts and opens the browser.
 - [ ] Uninstall works normally.
 - [ ] Uninstall keeps user data and displays the user data path.
-- [ ] Runtime data is written to `%LOCALAPPDATA%/ExamForgeAI`.
-- [ ] `uploads`, `outputs`, and `logs` are created under `%LOCALAPPDATA%/ExamForgeAI`.
+- [ ] Runtime data is written to `%LOCALAPPDATA%/CampusForge`.
+- [ ] `uploads`, `outputs`, and `logs` are created under `%LOCALAPPDATA%/CampusForge`.
 - [ ] Installation directory is not polluted by uploads, outputs, logs, or caches.
 
 Suggested command:
@@ -88,18 +88,18 @@ Suggested command:
 Expected outputs:
 
 ```text
-dist/ExamForgeAI.exe
-dist/installer/ExamForgeAISetup-0.4.1.exe
+dist/CampusForge.exe
+dist/installer/CampusForgeSetup-0.5.0.exe
 ```
 
 ## 5. GitHub Release Check
 
-- [ ] Release tag is correct, for example `v0.4.1`.
+- [ ] Release tag is correct, for example `v0.5.0`.
 - [ ] Tag version matches `installer/exam-review-agent.iss`, `installer/version_info.txt`, README, and release notes.
 - [ ] Release notes are written and include major changes, known issues, and Windows install instructions.
 - [ ] GitHub Actions Windows release workflow completed successfully.
-- [ ] `ExamForgeAI.exe` artifact is uploaded.
-- [ ] `ExamForgeAISetup-0.4.1.exe` artifact is uploaded.
+- [ ] `CampusForge.exe` artifact is uploaded.
+- [ ] `CampusForgeSetup-0.5.0.exe` artifact is uploaded.
 - [ ] Release assets are attached to the GitHub Release.
 - [ ] Download links work from a clean browser session.
 - [ ] The release is marked as draft until the installer has been smoke-tested.
@@ -107,8 +107,8 @@ dist/installer/ExamForgeAISetup-0.4.1.exe
 Suggested commands:
 
 ```powershell
-git tag v0.4.1
-git push origin v0.4.1
+git tag v0.5.0
+git push origin v0.5.0
 ```
 
 After the workflow completes, download the installer from GitHub Releases and run a final clean-machine smoke test.

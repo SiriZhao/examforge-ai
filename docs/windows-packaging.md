@@ -1,6 +1,6 @@
 # Windows Packaging
 
-This guide explains how to package ExamForge AI as a Windows desktop executable and installer.
+This guide explains how to package CampusForge as a Windows desktop executable and installer.
 
 The packaged app is designed for ordinary Windows users:
 
@@ -8,7 +8,7 @@ The packaged app is designed for ordinary Windows users:
 - No Node.js installation required.
 - FastAPI runs as an embedded local service.
 - The React frontend is served from bundled static files.
-- Runtime data is stored under `%LOCALAPPDATA%\ExamForgeAI`.
+- Runtime data is stored under `%LOCALAPPDATA%\CampusForge`.
 
 ## Build Locally
 
@@ -34,17 +34,17 @@ The script will:
 5. Install backend dependencies and PyInstaller.
 6. Run backend tests.
 7. Run frontend tests.
-8. Run `pyinstaller ExamForgeAI.spec`.
+8. Run `pyinstaller CampusForge.spec`.
 9. Build the Inno Setup installer if `ISCC.exe` is available.
 
 Expected outputs:
 
 ```text
-dist/ExamForgeAI.exe
-dist/installer/ExamForgeAISetup-0.4.1.exe
+dist/CampusForge.exe
+dist/installer/CampusForgeSetup-0.5.0.exe
 ```
 
-If Inno Setup is not installed, the script still produces `dist/ExamForgeAI.exe`.
+If Inno Setup is not installed, the script still produces `dist/CampusForge.exe`.
 
 ## Runtime Data
 
@@ -53,7 +53,7 @@ The packaged app does not write uploads, generated reports, or logs into the ins
 Runtime data is stored here:
 
 ```text
-%LOCALAPPDATA%\ExamForgeAI
+%LOCALAPPDATA%\CampusForge
 ```
 
 Subdirectories:
@@ -65,7 +65,7 @@ Subdirectories:
 The main desktop startup log is:
 
 ```text
-%LOCALAPPDATA%\ExamForgeAI\logs\desktop.log
+%LOCALAPPDATA%\CampusForge\logs\desktop.log
 ```
 
 ## Release on GitHub
@@ -78,22 +78,22 @@ Recommended release checklist:
    .\scripts\build-windows.ps1
    ```
 
-2. Smoke test `dist/ExamForgeAI.exe` on the build machine.
-3. Test the installer `dist/installer/ExamForgeAISetup-0.4.1.exe`.
+2. Smoke test `dist/CampusForge.exe` on the build machine.
+3. Test the installer `dist/installer/CampusForgeSetup-0.5.0.exe`.
 4. Ideally test on a clean Windows VM without Python and Node.js installed.
-5. Create a GitHub Release named `v0.4.1`.
+5. Create a GitHub Release named `v0.5.0`.
 6. Upload:
 
    ```text
-   dist/ExamForgeAI.exe
-   dist/installer/ExamForgeAISetup-0.4.1.exe
+   dist/CampusForge.exe
+   dist/installer/CampusForgeSetup-0.5.0.exe
    ```
 
 7. Include release notes:
 
    - Local desktop app.
    - No Python or Node.js required for end users.
-   - Runtime data path: `%LOCALAPPDATA%\ExamForgeAI`.
+   - Runtime data path: `%LOCALAPPDATA%\CampusForge`.
    - Known OCR limitations.
 
 ## Common Issues
@@ -132,7 +132,7 @@ Scanned PDF OCR may require Poppler and OCR runtime support. The app still works
 Check:
 
 ```text
-%LOCALAPPDATA%\ExamForgeAI\logs\desktop.log
+%LOCALAPPDATA%\CampusForge\logs\desktop.log
 ```
 
 ### App starts but browser does not open
@@ -140,7 +140,7 @@ Check:
 Open the log file:
 
 ```text
-%LOCALAPPDATA%\ExamForgeAI\logs\desktop.log
+%LOCALAPPDATA%\CampusForge\logs\desktop.log
 ```
 
 The app writes the local URL it started, usually `http://127.0.0.1:<port>`.
@@ -151,10 +151,10 @@ The desktop app automatically asks the OS for a free local port, so fixed-port c
 
 ### Installer uninstall keeps data
 
-Uninstalling ExamForge AI keeps user data by design. Delete this folder manually if needed:
+Uninstalling CampusForge keeps user data by design. Delete this folder manually if needed:
 
 ```text
-%LOCALAPPDATA%\ExamForgeAI
+%LOCALAPPDATA%\CampusForge
 ```
 
 

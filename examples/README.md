@@ -1,6 +1,6 @@
 # Examples
 
-This directory contains fictional demo materials for testing ExamForge AI.
+This directory contains fictional demo materials for testing CampusForge.
 
 Included files:
 

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import analyze, chat, download, export, generate_review, generate_review_jobs, llm, mock_exam, parse, upload
+from app.routers import analyze, chat, download, export, generate_review, generate_review_jobs, llm, mock_exam, parse, saas, upload
 from app.services.cloud_runtime import (
     cleanup_runtime_files,
     ensure_runtime_directories,
@@ -50,6 +50,7 @@ app.include_router(mock_exam.router, tags=["mock-exam"])
 app.include_router(download.router, tags=["download"])
 app.include_router(analyze.router, prefix="/api/analyze", tags=["analyze"])
 app.include_router(export.router, prefix="/api/export", tags=["export"])
+app.include_router(saas.router)
 
 
 @app.get("/health")
@@ -63,6 +64,9 @@ def health_check() -> dict[str, str | bool]:
         "llm_server_configured": settings.llm_server_configured,
         "llm_provider_configured": settings.llm_server_configured,
         "default_llm_model": settings.default_llm_model,
+        "supabase_configured": settings.supabase_configured,
+        "supabase_server_configured": settings.supabase_server_configured,
+        "stripe_configured": settings.stripe_configured,
         "ocr_available": is_ocr_available(),
         "storage_writable": is_storage_writable(),
         "public_base_url": settings.public_base_url,

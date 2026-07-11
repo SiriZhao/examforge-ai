@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve ExamForge AI.
+Thanks for helping improve CampusForge.
 
 ## Development
 

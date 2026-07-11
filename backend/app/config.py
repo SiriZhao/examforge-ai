@@ -6,12 +6,12 @@ from typing import Literal
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.5.0"
 AppMode = Literal["local_dev", "desktop", "cloud"]
 
 
 class Settings(BaseSettings):
-    app_name: str = "ExamForge AI"
+    app_name: str = "CampusForge"
     app_version: str = APP_VERSION
     app_mode: AppMode = Field(default="local_dev", validation_alias=AliasChoices("APP_MODE", "ERA_APP_MODE"))
     public_base_url: str = Field(default="", validation_alias=AliasChoices("PUBLIC_BASE_URL", "ERA_PUBLIC_BASE_URL"))
@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     default_llm_base_url: str = Field(default="https://api.deepseek.com", validation_alias=AliasChoices("DEFAULT_LLM_BASE_URL", "ERA_DEFAULT_LLM_BASE_URL"))
     deepseek_api_key: str = Field(default="", validation_alias=AliasChoices("DEEPSEEK_API_KEY", "ERA_DEEPSEEK_API_KEY"))
     openai_api_key: str = Field(default="", validation_alias=AliasChoices("OPENAI_API_KEY", "ERA_OPENAI_API_KEY"))
+    supabase_url: str = Field(default="", validation_alias=AliasChoices("SUPABASE_URL", "VITE_SUPABASE_URL"))
+    supabase_anon_key: str = Field(default="", validation_alias=AliasChoices("SUPABASE_ANON_KEY", "VITE_SUPABASE_ANON_KEY"))
+    supabase_jwt_secret: str = Field(default="", validation_alias=AliasChoices("SUPABASE_JWT_SECRET"))
+    supabase_service_role_key: str = Field(default="", validation_alias=AliasChoices("SUPABASE_SERVICE_ROLE_KEY"))
+    stripe_publishable_key: str = Field(default="", validation_alias=AliasChoices("STRIPE_PUBLISHABLE_KEY", "VITE_STRIPE_PUBLISHABLE_KEY"))
+    stripe_secret_key: str = Field(default="", validation_alias=AliasChoices("STRIPE_SECRET_KEY"))
+    stripe_webhook_secret: str = Field(default="", validation_alias=AliasChoices("STRIPE_WEBHOOK_SECRET"))
     llm_context_budget_chars: int = Field(default=120000, validation_alias=AliasChoices("LLM_CONTEXT_BUDGET_CHARS", "ERA_LLM_CONTEXT_BUDGET_CHARS"))
     llm_chunk_chars: int = Field(default=18000, validation_alias=AliasChoices("LLM_CHUNK_CHARS", "ERA_LLM_CHUNK_CHARS"))
     llm_chunk_overlap_chars: int = Field(default=1200, validation_alias=AliasChoices("LLM_CHUNK_OVERLAP_CHARS", "ERA_LLM_CHUNK_OVERLAP_CHARS"))
@@ -54,6 +61,18 @@ class Settings(BaseSettings):
     @property
     def llm_server_configured(self) -> bool:
         return bool(self.deepseek_api_key or self.openai_api_key)
+
+    @property
+    def supabase_configured(self) -> bool:
+        return bool(self.supabase_url and self.supabase_anon_key)
+
+    @property
+    def supabase_server_configured(self) -> bool:
+        return bool(self.supabase_url and self.supabase_jwt_secret)
+
+    @property
+    def stripe_configured(self) -> bool:
+        return bool(self.stripe_secret_key and self.stripe_webhook_secret)
 
     @property
     def normalized_cors_origins(self) -> list[str]:

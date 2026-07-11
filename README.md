@@ -1,146 +1,112 @@
-# ExamForge AI
+# CampusForge
 
-ExamForge AI 是面向大学生期末复习场景的资料包生成器。用户上传课件、教材、笔记、扫描试卷、往年题或图片后，系统会完成文本解析、OCR 清洗、多文件证据整合、题型反推、AI 深度整理和多格式导出，生成可直接复习、背诵、刷题和导入 Anki 的资料包。
+Build Smarter. Learn Better.
 
-English summary: ExamForge AI turns scattered course materials into exam-ready study packs with OCR cleanup, evidence extraction, optional LLM enhancement, mock exams, Anki cards, and Markdown / Word / PDF / Anki CSV export.
+CampusForge 是面向大学生的一站式 AI 学习与校园效率平台。当前仓库由 ExamForge AI 升级而来，保留期末复习资料包生成能力，并在 v0.5.0 引入 Web SaaS 架构基座：GitHub Pages 前端、FastAPI 云端后端、Supabase 认证/数据库/存储迁移、Stripe 计费配置、Windows 桌面客户端和发布流水线。
 
-作者：[SiriZhao](https://github.com/SiriZhao)  
-仓库：[SiriZhao/examforge-ai](https://github.com/SiriZhao/examforge-ai)  
-当前版本：v0.4.1  
-许可证：MIT License
+> 当前版本：v0.5.0
+> 仓库：<https://github.com/SiriZhao/examforge-ai>
+> 作者：SiriZhao
+> License：MIT
 
-## 核心能力
+## 当前可用能力
 
-- 支持 PDF、PPTX、DOCX、Markdown、TXT、PNG、JPG、JPEG。
-- 文字版 PDF 自动提取文本，扫描页按需 OCR，避免无意义逐页 OCR。
-- 支持 OCR 缓存、噪声清洗、公式片段保护、坏标题过滤。
-- 支持复习目标：1 天速通、3 天冲刺、7 天系统复习、重点背诵、重点刷题、整理 Anki、根据往年题抓重点、平衡模式。
-- 支持考试类型：不确定、闭卷、开卷、机考、编程、实验、论文/论述、口试/展示、课程论文/报告。
-- 支持详细度和输出风格：简洁、标准、详细、超详细；考前冲刺、学霸笔记、助教讲义、刷题训练、Anki 制卡。
-- 支持 DeepSeek / OpenAI-compatible 模型增强，也支持无 API Key 的本地安全底稿模式。
-- 支持长材料自动分块：chunk insight、证据包压缩、最终合成和 CONTEXT_TOO_LONG 自动重试。
-- 支持 Markdown、DOCX、PDF、Anki CSV 下载。
-- 同时支持云端 Web App 和 Windows 桌面版。
+- 上传 PDF、PPTX、DOCX、Markdown、TXT、PNG、JPG、JPEG。
+- OCR 清洗、文本抽取、多文件证据整合。
+- 长材料自动分块、chunk insight、最终合成，降低 `CONTEXT_TOO_LONG` 失败率。
+- 本地安全底稿，无 API Key 时也能生成可导出的基础资料。
+- 可选 DeepSeek / OpenAI-compatible AI 深度整理。
+- 复习目标、考试类型、详细度、输出风格。
+- Markdown、DOCX、PDF、Anki CSV 导出。
+- FastAPI 同源托管前端，支持 Docker 云端部署。
+- Windows 桌面 EXE 打包。
+- GitHub Pages 前端部署工作流。
+- Supabase / Stripe 配置和数据库迁移基座。
 
-## 为什么不直接把资料发给 ChatGPT / NotebookLM？
+## 尚需部署者配置的能力
 
-ExamForge AI 不是普通聊天界面，而是一条期末复习资料生产线：
+以下能力需要 Supabase、Stripe、云平台和 GitHub 账户权限，不会在本地凭空生效：
 
-| 能力 | ExamForge AI | 普通大模型聊天 |
+- Supabase 项目创建、Auth Redirect URL 配置、数据库迁移执行、Storage Bucket 创建。
+- Stripe Product / Price / Webhook Secret 配置。
+- 后端云服务部署 URL。
+- GitHub Pages 启用 GitHub Actions 部署。
+- GitHub Actions Variables / Secrets。
+- GitHub Release 上传资产。
+
+详细清单见 [docs/MANUAL_ACTIONS_REQUIRED.md](docs/MANUAL_ACTIONS_REQUIRED.md)。
+
+## 网页端使用流程
+
+1. 打开部署后的 CampusForge 网页。
+2. 输入课程或考试名称。
+3. 上传课件、教材、笔记、往年题或扫描图片。
+4. 选择复习目标、考试类型、详细度和输出风格。
+5. 选择本地整理模式，或配置 DeepSeek / OpenAI-compatible API Key 开启 AI 深度整理。
+6. 点击生成。
+7. 在线预览复习资料包。
+8. 下载 Markdown / Word / PDF / Anki CSV。
+
+如果部署者没有配置服务端 API Key，用户可以在网页端填写自己的 API Key。用户 Key 默认只随请求临时发送，不写入服务器文件；如果选择浏览器保存，应只保存在当前浏览器。
+
+## 为什么不直接发给 ChatGPT / NotebookLM
+
+| 能力 | CampusForge | 普通大模型聊天 |
 | --- | --- | --- |
-| OCR 清洗 | 自动处理扫描页、噪声、缓存 | 依赖用户手动整理 |
-| 多文件证据整合 | 自动合并课件、笔记、教材、往年题 | 需要反复提示 |
-| 往年题题型反推 | 根据真实题干和题号结构归纳题型 | 不稳定 |
+| OCR 清洗 | 自动处理扫描件和噪声 | 依赖上传质量 |
+| 多文件证据整合 | 按文件、题干、公式、定义组织证据 | 需要反复提示 |
 | 长材料处理 | 分块理解、chunk insight、最终合成 | 容易超上下文 |
-| 复习目标定制 | 内置目标和考试类型 | 需要用户自己设计 prompt |
-| 质量守门 | 检查题目、答案、Anki、乱码和导出字段 | 无内置校验 |
-| 导出 | Markdown / Word / PDF / Anki CSV | 通常要复制排版 |
-| 本地兜底 | 无 Key 也可生成安全底稿 | 无 |
-| 双形态发布 | 云端网页 + Windows 桌面版 | 不适用 |
-
-## 在线网页端使用教程
-
-部署者上线后，用户打开部署链接即可使用。若当前还没有公开链接，可按下方 Docker / Render / Railway / Fly.io 教程自行部署。
-
-网页端流程：
-
-1. 打开部署链接。
-2. 输入课程名或考试名，例如“概率论”“Python”“植物学下”。
-3. 上传课件、教材、笔记、往年题、扫描 PDF 或图片。
-4. 选择复习目标、考试类型、OCR 模式、详细度和输出风格。
-5. 选择本地整理或 AI 深度整理。
-6. 如果部署者没有配置服务端 Key，可在网页端填写自己的 DeepSeek / OpenAI-compatible API Key。
-7. 点击生成。
-8. 在线预览复习资料、题型分析、模拟卷、Anki 卡片和生成过程摘要。
-9. 下载 Markdown、Word、PDF 或 Anki CSV。
-
-如果不填写 API Key，系统仍会使用本地安全底稿模式生成可用资料。AI 深度整理通常能显著提升章节命名、题型归纳、模拟题和 Anki 卡片质量。
-
-## Windows 桌面版使用教程
-
-从 GitHub Releases 下载：
-
-```text
-ExamForgeAISetup-0.4.1.exe
-```
-
-安装后运行 ExamForge AI。桌面版适合处理更隐私的资料，默认数据目录为：
-
-```text
-%LOCALAPPDATA%\ExamForgeAI
-```
-
-桌面版仍可配置 DeepSeek / OpenAI-compatible API Key；不配置 Key 时使用本地安全底稿。
+| 往年题题型反推 | 提取题型线索并指导模拟卷 | 不稳定 |
+| 导出 | Markdown / DOCX / PDF / Anki CSV | 通常要手动排版 |
+| 质量守门 | 解析兜底、修复、回退安全底稿 | 用户自行判断 |
+| 部署形态 | 云端 Web + Windows EXE | 仅聊天界面 |
 
 ## 本地开发
 
-```bash
+```powershell
 git clone https://github.com/SiriZhao/examforge-ai.git
 cd examforge-ai
-```
 
-后端：
-
-```powershell
 cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
-```
+python -m uvicorn app.main:app --reload --port 8000
 
-前端：
-
-```powershell
-cd frontend
+cd ..\frontend
 npm install
+$env:VITE_API_BASE_URL="http://127.0.0.1:8000/api"
 npm run dev
 ```
 
-前端开发地址通常是：
+访问 <http://localhost:5173>。
 
-```text
-http://127.0.0.1:5173
-```
-
-本地开发如需指定后端地址，可在前端环境变量中设置：
-
-```text
-VITE_API_BASE_URL=http://127.0.0.1:8000/api
-```
-
-未设置时，生产构建会默认使用同源 `/api`。
-
-## Docker 部署
+## Docker 云端部署
 
 ```bash
-docker build -t examforge-ai .
-docker run --rm -p 8000:8000 --env-file .env.example examforge-ai
+docker build -t campusforge:0.5.0 .
+docker run --rm -p 8000:8000 --env-file .env.example campusforge:0.5.0
 ```
 
-打开：
+访问：
 
-```text
-http://127.0.0.1:8000
-http://127.0.0.1:8000/api/health
-```
+- <http://127.0.0.1:8000>
+- <http://127.0.0.1:8000/api/health>
 
-Docker 镜像会构建前端并由 FastAPI 托管静态页面，云端平台通过 `PORT` 环境变量指定端口。
+生产环境必须配置 HTTPS、CORS、存储目录、上传限制和必要密钥。
 
 ## Render 部署
 
-1. 打开 [Render](https://render.com) 并登录。
-2. 点击 New +，选择 Web Service。
-3. 连接 GitHub 仓库 `SiriZhao/examforge-ai`。
+1. 登录 <https://render.com>。
+2. New + → Web Service。
+3. 连接 `SiriZhao/examforge-ai`。
 4. Environment 选择 Docker。
 5. Branch 选择 `main`。
-6. Root Directory 留空。
-7. Health Check Path 填 `/api/health`。
-8. 添加环境变量：
+6. Health Check Path 填 `/api/health`。
+7. 设置环境变量：
 
 ```text
 APP_MODE=cloud
-PORT=10000
+APP_NAME=CampusForge
+APP_VERSION=0.5.0
 DEFAULT_LLM_PROVIDER=deepseek
 DEFAULT_LLM_MODEL=deepseek-v4-flash
 DEFAULT_LLM_BASE_URL=https://api.deepseek.com
@@ -151,131 +117,103 @@ TEMP_FILE_TTL_HOURS=24
 ENABLE_RAPIDOCR=true
 ENABLE_TESSERACT=false
 ENABLE_CLOUD_SAFE_MODE=true
-LLM_CONTEXT_BUDGET_CHARS=120000
-LLM_CHUNK_CHARS=18000
-LLM_CHUNK_OVERLAP_CHARS=1200
-LLM_MAX_CHUNKS_PER_ROUND=8
-LLM_MAX_REPAIR_CALLS=1
 LLM_ENABLE_CHUNK_SUMMARY=true
 LLM_ENABLE_FINAL_SYNTHESIS=true
 ```
 
-如需让用户免填 Key，可额外配置：
+可选服务端 AI Key：
 
 ```text
-DEEPSEEK_API_KEY=你的服务端 Key
+DEEPSEEK_API_KEY=your_api_key_here
+OPENAI_API_KEY=your_api_key_here
 ```
 
-不要把真实 Key 写入代码或提交到 Git。
+## GitHub Pages 前端部署
 
-## Railway / Fly.io 部署
+本仓库包含 `.github/workflows/deploy-pages.yml`。GitHub Pages 只部署前端静态文件，后端必须部署到持续运行的云平台。
 
-Railway 通常会识别根目录 Dockerfile 并构建服务；设置和 Render 类似的环境变量即可。
+需要在 GitHub 仓库中配置：
 
-Fly.io 可使用：
+- Settings → Pages → Source 选择 GitHub Actions。
+- Repository Variables：
+  - `VITE_API_BASE_URL`
+  - `VITE_SUPABASE_URL`
+  - `VITE_STRIPE_PUBLISHABLE_KEY`
+- Repository Secrets：
+  - `VITE_SUPABASE_ANON_KEY`
 
-```bash
-fly launch
-fly deploy
+最终项目站点地址按仓库自动计算：`https://<owner>.github.io/<repo>/`。
+
+## Windows 桌面版
+
+```powershell
+.\scripts\build-windows.ps1
 ```
 
-生产环境请配置 HTTPS、访问控制、上传限制、日志保护和成本监控。
+成功后生成：
 
-## API Key 说明
+- `dist/CampusForge.exe`
+- `dist/installer/CampusForgeSetup-0.5.0.exe`，如果本机安装了 Inno Setup。
 
-ExamForge AI 支持两种 AI Key 模式：
+桌面版不应内置服务器密钥。用户可输入自己的 API Key，或连接已配置服务端 Key 的云端后端。
 
-1. 服务端默认 Key：部署者通过环境变量配置 `DEEPSEEK_API_KEY` 或 `OPENAI_API_KEY`。后端使用该 Key，但不会返回给前端。
-2. 用户自带 Key：用户在网页端输入自己的 Key。后端仅用于当次请求，默认不写入服务器文件；前端若选择保存，只应保存在当前浏览器 localStorage，并提示用户。
+## Supabase 与 Stripe
 
-生产环境必须使用 HTTPS 传输用户自带 Key。
-
-## 长材料与 CONTEXT_TOO_LONG
-
-v0.4.1 起，长材料不再轻易直接退回本地安全底稿。系统会：
-
-1. 按文件、页面、章节、题号和自然段智能分块。
-2. 为每个 chunk 生成 chunk insight，保留考点、定义、公式、题型线索、往年题题干、Anki 候选和证据片段。
-3. 将 evidence pack、local_safe_draft、chunk insights、题干候选和用户设置合成为最终 AI 复习包。
-4. 如果模型返回 CONTEXT_TOO_LONG，自动缩小证据包并重试最终合成。
-5. 只有多次失败后，才回退本地安全底稿。
-
-## 上传限制
-
-默认允许：
+数据库迁移位于：
 
 ```text
-pdf, pptx, docx, md, txt, png, jpg, jpeg
+supabase/migrations/0001_campusforge_saas.sql
 ```
 
-默认拒绝：
+该迁移建立 profiles、projects、uploaded_files、ai_tasks、usage、credits、subscriptions、payment_events 等基础表，并启用 RLS。执行前请在测试项目验证。
+
+Stripe 相关密钥只允许放在后端环境变量：
 
 ```text
-exe, bat, ps1, sh, js, html, php, py, dll, msi, zip, rar, 7z
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+STRIPE_PUBLISHABLE_KEY=
 ```
 
-默认上传配置可通过环境变量调整：
+不得将 `STRIPE_SECRET_KEY`、`SUPABASE_SERVICE_ROLE_KEY` 或 AI API Key 放入前端、EXE 或 GitHub Pages 构建输出。
 
-```text
-MAX_UPLOAD_MB=50
-MAX_FILES_PER_REQUEST=10
-JOB_TIMEOUT_SECONDS=600
-TEMP_FILE_TTL_HOURS=24
-```
+## 长材料处理
 
-## 项目结构
+v0.5.0 继续保留 v0.4.1 的长上下文策略：
 
-```text
-examforge-ai/
-├─ backend/              FastAPI 后端、解析、OCR、LLM、导出
-├─ frontend/             React + TypeScript 前端
-├─ docs/                 部署、用户指南、安全、隐私、免责声明
-├─ examples/             可公开的虚构示例材料
-├─ scripts/              构建、清理、Windows 打包脚本
-├─ installer/            Windows 安装包配置
-├─ .github/              GitHub Actions 与模板
-├─ Dockerfile            云端 Web App 镜像构建
-├─ docker-compose.yml    本地 Docker 示例
-├─ render.yaml           Render 示例配置
-├─ fly.toml              Fly.io 示例配置
-├─ ExamForgeAI.spec      PyInstaller 打包配置
-├─ desktop_main.py       Windows 桌面版入口
-├─ start.bat             本地启动脚本
-├─ README.md
-└─ LICENSE
-```
+- 字符预算保护。
+- 智能分块。
+- chunk insight。
+- final synthesis。
+- `CONTEXT_TOO_LONG` 自动降级重试。
+- 多次失败后才回退本地安全底稿。
 
-## 隐私与安全
+系统会优先保留往年题题干、题型线索、公式、定义、例题、代码、易错点、PPT 标题和用户设置。
 
-- 云端部署时，上传文件会由服务器处理。
-- 使用 AI 深度整理时，材料证据可能会发送给对应 LLM 服务商。
-- 用户自带 Key 默认不应存储在服务器。
+## 隐私说明
+
+- 云端部署时，用户上传文件会由部署者服务器处理。
+- 如果启用服务端 AI Key，材料可能会发送给对应 LLM 服务商。
+- 用户自带 API Key 默认不写入服务器文件。
 - 本地桌面版更适合处理隐私敏感资料。
-- 请勿上传无权处理的课程资料、考试资料或包含个人隐私的文件。
-- 公共部署建议增加 HTTPS、登录、限流、任务队列、成本监控和滥用防护。
+- 请勿上传无权处理的课程资料、考试资料或含个人隐私的文件。
 
-更多文档：
-
-- [docs/user-guide.md](docs/user-guide.md)
-- [docs/cloud-deployment.md](docs/cloud-deployment.md)
-- [docs/windows-desktop.md](docs/windows-desktop.md)
-- [docs/security.md](docs/security.md)
-- [docs/privacy.md](docs/privacy.md)
-- [docs/disclaimer.md](docs/disclaimer.md)
-- [docs/release-checklist.md](docs/release-checklist.md)
+更多内容见 [docs/privacy.md](docs/privacy.md)。
 
 ## 免责声明
 
-- 本项目生成内容仅供学习和复习辅助。
-- 不保证押题准确，也不保证生成内容完全正确。
-- 用户应自行核对课程材料、教材和教师要求。
-- 本项目不鼓励作弊、泄露考试内容或违反学校规定。
-- 上传和使用资料前，请确认拥有合法权限。
+- 生成内容仅供学习和复习辅助。
+- 不保证押题准确，不保证内容完全正确。
+- 用户应自行核对课程材料、教师要求和学校规定。
+- 不鼓励作弊、泄露考试内容或违反学校规定。
+- 自部署者需自行承担服务器成本、API 成本和数据合规责任。
 
-## 依赖与商用提示
+更多内容见 [docs/disclaimer.md](docs/disclaimer.md)。
 
-本项目使用 FastAPI、React、PyInstaller、文档解析、OCR 和 LLM API 相关依赖。项目代码采用 MIT License；商用部署前，请自行审查第三方依赖许可证、LLM 服务条款、学校/机构规定和当地法律法规。
+## 版本与发布
 
-## License
+- 当前版本：v0.5.0
+- Release tag：`v0.5.0`
+- Release title：`CampusForge v0.5.0`
 
-MIT License. See [LICENSE](LICENSE).
+发布检查见 [docs/release-checklist.md](docs/release-checklist.md)。

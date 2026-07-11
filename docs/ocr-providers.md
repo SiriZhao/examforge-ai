@@ -1,6 +1,6 @@
 # OCR Providers
 
-ExamForge AI extracts embedded text first and only uses OCR when a page or image needs it. This avoids wasting time on text PDFs and improves cloud performance.
+CampusForge extracts embedded text first and only uses OCR when a page or image needs it. This avoids wasting time on text PDFs and improves cloud performance.
 
 ## Current Strategy
 

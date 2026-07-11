@@ -1,6 +1,6 @@
 # LLM Providers
 
-ExamForge AI works without an LLM by generating a local safe draft. Optional LLM enhancement can improve topic naming, question type inference, mock exams, Anki cards, and sprint plans.
+CampusForge works without an LLM by generating a local safe draft. Optional LLM enhancement can improve topic naming, question type inference, mock exams, Anki cards, and sprint plans.
 
 ## Supported Configuration
 

@@ -1,4 +1,4 @@
-app = "examforge-ai"
+app = "campusforge"
 primary_region = "nrt"
 
 [build]
@@ -6,6 +6,8 @@ primary_region = "nrt"
 
 [env]
   APP_MODE = "cloud"
+  APP_NAME = "CampusForge"
+  APP_VERSION = "0.5.0"
   PORT = "8000"
   MAX_UPLOAD_MB = "50"
   MAX_FILES_PER_REQUEST = "10"

@@ -1,6 +1,6 @@
 # Security Notes
 
-ExamForge AI handles uploaded learning materials, generated reports, and optional LLM API credentials. Treat public deployments as data-processing services.
+CampusForge handles uploaded learning materials, generated reports, and optional LLM API credentials. Treat public deployments as data-processing services.
 
 ## Secrets
 

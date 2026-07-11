@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(0, 4, 0, 0),
-    prodvers=(0, 4, 0, 0),
+    filevers=(0, 5, 0, 0),
+    prodvers=(0, 5, 0, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -15,14 +15,14 @@ VSVersionInfo(
         '040904B0',
         [
           StringStruct('CompanyName', 'SiriZhao'),
-          StringStruct('FileDescription', 'ExamForge AI review pack generator'),
-          StringStruct('FileVersion', '0.4.1'),
-          StringStruct('InternalName', 'ExamForgeAI'),
+          StringStruct('FileDescription', 'CampusForge AI study SaaS desktop client'),
+          StringStruct('FileVersion', '0.5.0'),
+          StringStruct('InternalName', 'CampusForge'),
           StringStruct('LegalCopyright', 'Copyright 2026 SiriZhao'),
-          StringStruct('OriginalFilename', 'ExamForgeAI.exe'),
-          StringStruct('ProductName', 'ExamForge AI'),
-          StringStruct('ProductVersion', '0.4.1'),
-          StringStruct('Comments', 'Cloud and desktop exam review pack generator'),
+          StringStruct('OriginalFilename', 'CampusForge.exe'),
+          StringStruct('ProductName', 'CampusForge'),
+          StringStruct('ProductVersion', '0.5.0'),
+          StringStruct('Comments', 'Cloud and desktop AI study SaaS client'),
         ],
       )
     ]),

@@ -11,7 +11,7 @@ function Print-Result {
     if ($Result.Ok) { Write-Ok $Result.Message } else { Write-Fail $Result.Message }
 }
 
-Write-Host "ExamForge AI 诊断报告" -ForegroundColor Green
+Write-Host "CampusForge 诊断报告" -ForegroundColor Green
 Write-Host "项目目录：$ProjectRoot"
 Write-Host "诊断时间：$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 

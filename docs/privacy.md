@@ -1,10 +1,10 @@
 # Privacy Notice
 
-ExamForge AI can run as a local desktop app or as a cloud web app. Privacy expectations differ by deployment mode.
+CampusForge can run as a local desktop app or as a cloud web app. Privacy expectations differ by deployment mode.
 
 ## Cloud Deployments
 
-- Uploaded files are processed by the server that hosts ExamForge AI.
+- Uploaded files are processed by the server that hosts CampusForge.
 - Generated reports, exports, OCR cache, and temporary files are stored in the configured runtime directories until cleanup.
 - If the deployer configures a server-side LLM API key, selected material evidence may be sent to the configured LLM provider.
 - If a user provides their own API key, the backend uses it for the current request and does not intentionally persist it on the server.

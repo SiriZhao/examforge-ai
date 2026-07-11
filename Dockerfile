@@ -5,6 +5,8 @@ COPY frontend/package*.json ./
 RUN npm install
 COPY frontend ./
 ENV VITE_API_BASE_URL=
+ENV VITE_APP_NAME=CampusForge
+ENV VITE_APP_VERSION=0.5.0
 RUN npm run build
 
 FROM python:3.12-slim AS runtime
@@ -12,6 +14,8 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV APP_MODE=cloud
+ENV APP_NAME=CampusForge
+ENV APP_VERSION=0.5.0
 ENV PORT=8000
 ENV STORAGE_DIR=/data
 ENV UPLOAD_DIR=uploads

@@ -1,6 +1,6 @@
 # Introduction to Plant Biology
 
-> Fictional demo course material for ExamForge AI testing. This is not based on any real course, textbook, lecture, or exam.
+> Fictional demo course material for CampusForge testing. This is not based on any real course, textbook, lecture, or exam.
 
 ## Lecture 1: What Makes a Plant a Plant?
 

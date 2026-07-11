@@ -1,6 +1,6 @@
 # Deployment
 
-ExamForge AI supports three modes:
+CampusForge supports three modes:
 
 | Mode | How it runs | Best for |
 | --- | --- | --- |

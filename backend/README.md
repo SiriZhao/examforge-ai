@@ -1,6 +1,6 @@
-# ExamForge AI 后端
+# CampusForge 后端
 
-这是 ExamForge AI｜期末复习资料生成器的 FastAPI 后端服务，负责上传文件、解析文本、执行 OCR、生成复习报告和导出文件。
+这是 CampusForge｜期末复习资料生成器的 FastAPI 后端服务，负责上传文件、解析文本、执行 OCR、生成复习报告和导出文件。
 
 ## 启动
 

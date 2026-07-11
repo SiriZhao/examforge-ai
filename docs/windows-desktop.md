@@ -12,25 +12,25 @@ Run from the repository root:
 
 The script should:
 
-1. Stop old ExamForge AI processes.
+1. Stop old CampusForge processes.
 2. Remove old `dist/` and `build/` outputs.
 3. Build `frontend/dist`.
-4. Run PyInstaller with `ExamForgeAI.spec`.
+4. Run PyInstaller with `CampusForge.spec`.
 5. Include `frontend/dist` in the packaged executable.
-6. Produce `dist/ExamForgeAI.exe`.
-7. Produce `dist/installer/ExamForgeAISetup-0.4.1.exe` when Inno Setup is available.
+6. Produce `dist/CampusForge.exe`.
+7. Produce `dist/installer/CampusForgeSetup-0.5.0.exe` when Inno Setup is available.
 
 ## Verify
 
 Start:
 
 ```powershell
-.\dist\ExamForgeAI.exe
+.\dist\CampusForge.exe
 ```
 
 Then check:
 
-- The browser opens ExamForge AI.
+- The browser opens CampusForge.
 - `/api/health` returns JSON with version and mode.
 - The page does not show `Frontend build not found`.
 - A small file can be uploaded and exported.

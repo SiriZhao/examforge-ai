@@ -1,6 +1,6 @@
-# ExamForge AI Cloud Deployment
+# CampusForge Cloud Deployment
 
-ExamForge AI can run as a single Docker web app. The FastAPI backend serves both the API and the built frontend, so users only need a browser URL.
+CampusForge can run as a single Docker web app. The FastAPI backend serves both the API and the built frontend, so users only need a browser URL.
 
 ## Architecture
 
@@ -16,8 +16,8 @@ ExamForge AI can run as a single Docker web app. The FastAPI backend serves both
 ## Docker
 
 ```bash
-docker build -t examforge-ai:0.4.1 .
-docker run --rm -p 8000:8000 --env-file .env.example examforge-ai:0.4.1
+docker build -t examforge-ai:0.5.0 .
+docker run --rm -p 8000:8000 --env-file .env.example examforge-ai:0.5.0
 ```
 
 Open:
@@ -63,7 +63,7 @@ Do not put real API keys into git. Configure `DEEPSEEK_API_KEY` or `OPENAI_API_K
 
 1. User-provided key: the browser sends the key for a generation request. Use HTTPS in production. The server does not persist it.
 2. Server default key: the deployer sets `DEEPSEEK_API_KEY` or `OPENAI_API_KEY`; the frontend can use AI mode without seeing the key.
-3. No key: ExamForge AI falls back to local safe draft mode.
+3. No key: CampusForge falls back to local safe draft mode.
 
 ## Render
 
@@ -84,7 +84,7 @@ Suggested environment:
 
 ## Long Material Handling
 
-When uploaded materials exceed the configured context budget, ExamForge AI does not immediately fall back to the local safe draft. It automatically:
+When uploaded materials exceed the configured context budget, CampusForge does not immediately fall back to the local safe draft. It automatically:
 
 1. Splits material by file, page, section, question number, and paragraph boundaries.
 2. Builds chunk insights for exam points, definitions, formulas, question patterns, Anki candidates, common mistakes, and evidence snippets.

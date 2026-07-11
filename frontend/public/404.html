@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CampusForge</title>
+    <script>
+      (function () {
+        var l = window.location;
+        var path = l.pathname.replace(/^\/+/, "");
+        var query = l.search ? "&" + l.search.slice(1).replace(/&/g, "~and~") : "";
+        var target = l.protocol + "//" + l.hostname + (l.port ? ":" + l.port : "") + "/" +
+          "?p=/" + path + query + l.hash;
+        window.location.replace(target);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
+

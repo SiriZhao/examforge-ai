@@ -61,7 +61,7 @@ jobs:
 
       - name: Build Windows executable with PyInstaller
         shell: pwsh
-        run: .\backend\.venv\Scripts\python.exe -m PyInstaller ExamForgeAI.spec --noconfirm
+        run: .\backend\.venv\Scripts\python.exe -m PyInstaller CampusForge.spec --noconfirm
 
       - name: Install Inno Setup
         shell: pwsh
@@ -87,24 +87,24 @@ jobs:
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ExamForgeAI-exe
-          path: dist/ExamForgeAI.exe
+          name: CampusForge-exe
+          path: dist/CampusForge.exe
           if-no-files-found: error
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ExamForgeAI-installer
-          path: dist/installer/ExamForgeAISetup-0.4.1.exe
+          name: CampusForge-installer
+          path: dist/installer/CampusForgeSetup-0.5.0.exe
           if-no-files-found: error
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ExamForge AI ${{ github.ref_name }}
+          name: CampusForge ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           files: |
-            dist/ExamForgeAI.exe
-            dist/installer/ExamForgeAISetup-0.4.1.exe
+            dist/CampusForge.exe
+            dist/installer/CampusForgeSetup-0.5.0.exe
 

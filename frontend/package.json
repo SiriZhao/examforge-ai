@@ -1,6 +1,6 @@
 {
-  "name": "examforge-ai",
-  "version": "0.4.1",
+  "name": "campusforge",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
