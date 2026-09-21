@@ -91,6 +91,12 @@ def normalize_chapter_title(title: str) -> str:
 
 def clean_unit_title(title: str) -> str:
     cleaned = clean_text(title)
+    # Keep an explicit major-chapter marker. Removing the Arabic ordinal from
+    # titles such as 第1章 行列式 prevents chapter-boundary detection.
+    major_chapter = re.match(r"^\s*第\s*[\d一二三四五六七八九十百零〇]+\s*章", cleaned)
+    if major_chapter:
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        return cleaned.strip(" -_=+*/\\|:：,，;；.。")
     cleaned = re.sub(r"^\s*(?:第?\s*)?\d+\s*(?:页|page)?\s*[./、:-]?\s*", "", cleaned, flags=re.I)
     cleaned = re.sub(r"\s+", " ", cleaned)
     cleaned = cleaned.strip(" -_=+*/\\|:：,，;；.。")

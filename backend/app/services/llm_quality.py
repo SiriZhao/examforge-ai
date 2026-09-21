@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass
 
 from app.schemas.review import ExamType, ReportQuality, ReviewReport, StudyGoal
+from app.services.chapter_extractor import DEFAULT_CHAPTER, extract_chapters
+from app.services.quality_checker import check_output_quality
 
 
 @dataclass
@@ -16,6 +18,10 @@ class QualityResult:
     quality_warnings: list[str]
     quality_failures: list[str]
     repairable: bool
+    section_coverage_ratio: float
+    missing_sections: list[str]
+    duplicate_sections: list[str]
+    is_empty: bool
 
     def to_model(self) -> ReportQuality:
         return ReportQuality(
@@ -29,6 +35,10 @@ class QualityResult:
             quality_warnings=self.quality_warnings,
             quality_failures=self.quality_failures,
             repairable=self.repairable,
+            section_coverage_ratio=self.section_coverage_ratio,
+            missing_sections=self.missing_sections,
+            duplicate_sections=self.duplicate_sections,
+            is_empty=self.is_empty,
         )
 
 
@@ -45,7 +55,8 @@ def validate_report_quality(
     failures: list[str] = []
     body = build_report_body(report)
     material_len = len(materials_text.strip())
-    topic_count = len(report.study_units) or len(report.chapters) or len(report.high_frequency_points)
+    markdown_headings = len(re.findall(r"^#{1,3}\s+", report.markdown, re.M))
+    topic_count = len(report.study_units) or len(report.chapters) or len(report.high_frequency_points) or markdown_headings
     question_count = len(report.mock_exam.questions)
     answered_count = sum(1 for item in report.mock_exam.questions if item.answer.strip())
     explained_count = sum(1 for item in report.mock_exam.questions if item.explanation.strip())
@@ -97,14 +108,14 @@ def validate_report_quality(
         failures.append("缺少具体复习单元或考点。")
         score -= 24
     if question_count < 3:
-        failures.append("练习题数量不足。")
-        score -= 18
+        warnings.append("当前资料未包含足量练习题；这不是 study guide 可用性的硬失败。")
+        score -= 2
     if question_count and answered_count < question_count:
         failures.append("部分练习题缺少参考答案。")
         score -= 16
     if anki_count < 3:
-        failures.append("Anki 卡片数量不足。")
-        score -= 14
+        warnings.append("当前资料未包含足量 Anki 卡片；可按需生成记忆卡。")
+        score -= 2
     if study_goal == "anki_focused" and anki_count < 10:
         failures.append("Anki 整理目标下，卡片数量或覆盖不足。")
         score -= 12
@@ -134,6 +145,25 @@ def validate_report_quality(
         warnings.append("Markdown 标题层级不清晰，可能影响 Word/PDF 导出阅读。")
         score -= 6
 
+    expected_sections = list(
+        dict.fromkeys(
+            section.title
+            for section in extract_chapters(materials_text)
+            if section.title != DEFAULT_CHAPTER and section.text.strip()
+        )
+    )[:40]
+    engine_check = check_output_quality(report, expected_sections)
+    warnings.extend(item for item in engine_check.warnings if item not in warnings)
+    failures.extend(item for item in engine_check.failures if item not in failures)
+    if engine_check.is_empty:
+        score -= 30
+    if engine_check.coverage_ratio < 0.5 and len(expected_sections) >= 3:
+        score -= 20
+    elif engine_check.coverage_ratio < 0.8 and len(expected_sections) >= 2:
+        score -= 8
+    if engine_check.duplicate_sections:
+        score -= min(12, len(engine_check.duplicate_sections) * 3)
+
     if materials_text and report.mock_exam.questions:
         material_terms = set(re.findall(r"[\u4e00-\u9fff]{2,6}|[A-Za-z]{4,}", materials_text.lower()))
         question_terms = set(
@@ -143,22 +173,26 @@ def validate_report_quality(
             warnings.append("模拟题与材料关键词重合较少，需要检查是否偏离材料。")
             score -= 2
 
-    if not failures and topic_count and question_count >= 3 and answered_count >= 3 and anki_count >= 3:
+    if not failures and topic_count:
         score += 8
 
     score = clamp_score(score)
     repairable = score >= 35 or not has_garbled_text(body)
     return QualityResult(
-        score,
-        material_score,
-        topic_score,
-        mock_score,
-        anki_score,
-        export_score,
-        evidence_score,
-        warnings,
-        failures,
-        repairable,
+        quality_score=score,
+        material_completeness_score=material_score,
+        topic_coverage_score=topic_score,
+        mock_exam_quality_score=mock_score,
+        anki_quality_score=anki_score,
+        export_readiness_score=export_score,
+        evidence_integration_score=evidence_score,
+        quality_warnings=warnings,
+        quality_failures=failures,
+        repairable=repairable,
+        section_coverage_ratio=engine_check.coverage_ratio,
+        missing_sections=engine_check.missing_sections,
+        duplicate_sections=engine_check.duplicate_sections,
+        is_empty=engine_check.is_empty,
     )
 
 

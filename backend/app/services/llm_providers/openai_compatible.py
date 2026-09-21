@@ -1,16 +1,20 @@
 import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 import httpx
 from pydantic import ValidationError
 
+from app.config import settings
 from app.schemas.review import DetailLevel, ExamType, LLMConfig, LLMErrorInfo, OutputStyle, ReviewPlanItem, ReviewReport, StudyGoal, StudyUnit
 from app.services.chapter_extractor import clean_unit_title, is_bad_unit_title
 from app.services.evidence_pack import build_evidence_pack
 from app.services.generator import generate_markdown_review
+from app.services.generation_diagnostics import diagnostic
+from app.services.llm_capabilities import capability_for, estimate_tokens
 from app.services.llm_providers.base import BaseLLMProvider, LLMProviderError
 from app.services.llm_quality import build_repair_report_prompt, validate_report_quality
 from app.services.llm_service_prompt import (
@@ -24,8 +28,18 @@ from app.services.llm_service_prompt import (
     split_material_chunks,
 )
 from app.services.text_quality import clean_formula_text, clean_topic_list, clean_topic_name
+from app.services.study_unit_prompt import STUDY_UNIT_SYSTEM_PROMPT, build_study_unit_prompt
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class LLMChatResult:
+    content: str
+    finish_reason: str | None
+    stop_reason: str | None
+    usage: dict[str, Any]
+    http_status: int
 
 
 class OpenAICompatibleLLMProvider(BaseLLMProvider):
@@ -34,6 +48,86 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
     default_base_url = "https://api.openai.com/v1"
     default_model = "gpt-4o-mini"
     needs_v1_suffix = True
+
+    def generate_stage(self, stage: str, prompt: str, config: LLMConfig, *, max_output_tokens: int) -> str:
+        """Run an unconstrained v4 reasoning/writing stage.
+
+        The stage prompt carries the structured evidence and intent; unlike the
+        legacy StudyUnit call, no fixed field/count schema is imposed here.
+        """
+        endpoint, model = self.prepare_request(config)
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are an expert university tutor, curriculum analyst, and exam-preparation editor. Preserve grounding, distinguish observed/inferred/generated material, and write only what the requested stage needs."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.3,
+            "max_tokens": max(512, int(max_output_tokens)),
+        }
+        result = self.post_chat_result(endpoint, config.api_key or "", payload, timeout=max(30, settings.request_timeout_seconds))
+        return result.content
+
+    def generate_study_unit(
+        self,
+        chapter_title: str,
+        chunk_text: str,
+        config: LLMConfig,
+        *,
+        max_output_tokens: int,
+        concise: bool = False,
+    ) -> StudyUnit:
+        endpoint, model = self.prepare_request(config)
+        prompt = build_study_unit_prompt(chapter_title, chunk_text, concise=concise)
+        configured_max_output = max(512, int(max_output_tokens))
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": STUDY_UNIT_SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": configured_max_output,
+        }
+        diagnostic(
+            "llm_request_payload",
+            provider=self.display_name,
+            model=model,
+            prompt_token_estimate=estimate_tokens(STUDY_UNIT_SYSTEM_PROMPT, model) + estimate_tokens(prompt, model) + 32,
+            configured_context_limit=capability_for(config.provider, model).context_window,
+            configured_max_output=configured_max_output,
+            request_body_bytes=len(json.dumps(payload, ensure_ascii=False).encode("utf-8")),
+        )
+        result = self.post_chat_result(
+            endpoint,
+            config.api_key or "",
+            payload,
+            timeout=max(10, settings.request_timeout_seconds),
+        )
+        try:
+            data = tolerant_parse_llm_report(result.content)
+            if isinstance(data.get("study_unit"), dict):
+                data = data["study_unit"]
+            data.setdefault("name", chapter_title)
+            return StudyUnit.model_validate(data)
+        except (json.JSONDecodeError, TypeError, ValidationError, ValueError) as exc:
+            truncated = response_likely_truncated(result, configured_max_output)
+            diagnostic(
+                "llm_parse_failed",
+                provider=self.display_name,
+                model=model,
+                finish_reason=result.finish_reason,
+                returned_character_count=len(result.content),
+                exception_type=type(exc).__name__,
+                error_code="LLM_OUTPUT_TRUNCATED" if truncated else "LLM_RESPONSE_PARSE_ERROR",
+            )
+            raise self.error(
+                "LLM_OUTPUT_TRUNCATED" if truncated else "LLM_RESPONSE_PARSE_ERROR",
+                "The model returned truncated chapter data." if truncated else "The model returned incomplete or invalid chapter data.",
+                "RecallForge will reduce the current unit output and retry a bounded number of times.",
+                config,
+                model=model,
+            ) from exc
 
     def enhance_report(
         self,
@@ -307,6 +401,10 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.35,
+            "max_tokens": min(
+                capability_for(config.provider, model).max_output_tokens,
+                capability_for(config.provider, model).reserved_output_tokens,
+            ),
         }
         content = self.post_chat_completions(endpoint, config.api_key or "", payload, timeout=timeout)
         try:
@@ -314,8 +412,7 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             normalize_review_payload(data)
             return ReviewReport.model_validate(data)
         except (json.JSONDecodeError, KeyError, TypeError, ValidationError, ValueError) as exc:
-            raw_preview = content[:1000].replace("\n", "\\n") if content else ""
-            logger.warning("LLM response parse failed. raw_preview=%s", raw_preview)
+            logger.warning("LLM response parse failed. returned_chars=%s", len(content or ""))
             raise self.error(
                 "RESPONSE_PARSE_ERROR",
                 "大模型返回内容无法解析为可用复习资料包。",
@@ -350,6 +447,9 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
         return f"{base_url}/chat/completions", model
 
     def post_chat_completions(self, endpoint: str, api_key: str, payload: dict, *, timeout: int) -> str:
+        return self.post_chat_result(endpoint, api_key, payload, timeout=timeout).content
+
+    def post_chat_result(self, endpoint: str, api_key: str, payload: dict, *, timeout: int) -> LLMChatResult:
         try:
             response = httpx.post(
                 endpoint,
@@ -360,7 +460,41 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             if response.status_code >= 400:
                 raise self.http_error(response, payload.get("model"))
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            content = extract_chat_content(choice["message"].get("content"))
+            finish_reason = choice.get("finish_reason")
+            stop_reason = choice.get("stop_reason") or data.get("stop_reason")
+            usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+            diagnostic(
+                "llm_provider_response",
+                provider=self.display_name,
+                model=str(payload.get("model") or ""),
+                http_status=response.status_code,
+                finish_reason=finish_reason,
+                stop_reason=stop_reason,
+                returned_character_count=len(content or ""),
+                returned_token_usage=usage,
+            )
+            if finish_reason in {"length", "max_tokens", "max_output_tokens"} or stop_reason in {
+                "length",
+                "max_tokens",
+                "max_output_tokens",
+            }:
+                raise self.error(
+                    "LLM_OUTPUT_TRUNCATED",
+                    "The model output reached its limit and was truncated.",
+                    "RecallForge will reduce the current unit output and retry a bounded number of times.",
+                    None,
+                    model=str(payload.get("model") or ""),
+                    http_status=response.status_code,
+                )
+            return LLMChatResult(
+                content=content,
+                finish_reason=finish_reason,
+                stop_reason=stop_reason,
+                usage=usage,
+                http_status=response.status_code,
+            )
         except LLMProviderError:
             raise
         except httpx.TimeoutException as exc:
@@ -408,13 +542,22 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             user_message = "大模型调用失败：模型名称可能不存在或当前账号无权限。"
             suggestion = self.model_suggestion()
         elif status == 429:
-            code = "RATE_LIMITED"
-            user_message = "大模型服务触发限流。"
-            suggestion = "请稍后重试，或检查当前服务商的额度和并发限制。"
+            quota_exceeded = bool(re.search(r"quota|balance|insufficient|余额|额度", message, re.I))
+            code = "PROVIDER_QUOTA_EXCEEDED" if quota_exceeded else "RATE_LIMITED"
+            user_message = "大模型服务额度不足。" if quota_exceeded else "大模型服务触发限流。"
+            suggestion = (
+                "请检查服务商余额或额度，已完成章节仍会保留。"
+                if quota_exceeded
+                else "请稍后重试，或检查当前服务商的额度和并发限制。"
+            )
         elif status in {400, 413} and re.search(r"context|token|length|too long", message, re.I):
             code = "CONTEXT_TOO_LONG"
             user_message = "模型服务明确返回上下文过长。"
             suggestion = CONTEXT_TOO_LONG_MESSAGE
+        elif status >= 500:
+            code = "LLM_PROVIDER_ERROR"
+            user_message = f"大模型服务暂时不可用（HTTP {status}）。"
+            suggestion = "系统将有限重试；已完成章节会从 checkpoint 继续。"
         else:
             code = "UNKNOWN_ERROR"
             user_message = f"大模型服务返回 HTTP {status}。"
@@ -437,7 +580,7 @@ class OpenAICompatibleLLMProvider(BaseLLMProvider):
             suggestion=suggestion,
             provider=self.display_name,
             model=model or ((config.model if config else None) or self.default_model),
-            can_retry=code not in {"CONFIG_MISSING"},
+            can_retry=code not in {"CONFIG_MISSING", "AUTH_FAILED", "MODEL_NOT_FOUND", "PROVIDER_QUOTA_EXCEEDED"},
             fallback_used=True,
         )
         return LLMProviderError(error, http_status=http_status)
@@ -489,6 +632,35 @@ def normalize_base_url(base_url: str, *, needs_v1: bool = True) -> str:
     return cleaned
 
 
+def extract_chat_content(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return "".join(parts)
+    raise TypeError("LLM message content is not text.")
+
+
+def response_likely_truncated(result: LLMChatResult, configured_max_output: int) -> bool:
+    if result.finish_reason in {"length", "max_tokens", "max_output_tokens"}:
+        return True
+    if result.stop_reason in {"length", "max_tokens", "max_output_tokens"}:
+        return True
+    completion_tokens = result.usage.get("completion_tokens") or result.usage.get("output_tokens")
+    if isinstance(completion_tokens, (int, float)) and completion_tokens >= configured_max_output * 0.98:
+        return True
+    content = result.content.strip()
+    if not content.startswith("{"):
+        return False
+    if content.count("{") > content.count("}") or content.count("[") > content.count("]"):
+        return True
+    unescaped_quotes = len(re.findall(r'(?<!\\)"', content))
+    return bool(unescaped_quotes % 2)
+
+
 def tolerant_parse_llm_report(raw_text: str) -> dict:
     content = (raw_text or "").lstrip("\ufeff").strip()
     if not content:
@@ -514,8 +686,7 @@ def tolerant_parse_llm_report(raw_text: str) -> dict:
     if looks_like_complete_markdown_report(content):
         return markdown_report_to_payload(content)
 
-    raw_preview = content[:1000].replace("\n", "\\n")
-    logger.warning("LLM response parse failed. raw_preview=%s", raw_preview)
+    logger.warning("LLM response parse failed. returned_chars=%s", len(content))
     raise ValueError("LLM response is neither valid JSON nor usable Markdown.")
 
 

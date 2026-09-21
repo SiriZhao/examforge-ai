@@ -10,6 +10,12 @@ const base = process.env.VITE_APP_BASE_PATH || (isUserSite ? "/" : repoName ? `/
 export default defineConfig({
   base,
   plugins: [react()],
+  server: {
+    proxy: {
+      "/api": process.env.VITE_DEV_API_TARGET || "http://127.0.0.1:8000",
+      "/download": process.env.VITE_DEV_API_TARGET || "http://127.0.0.1:8000",
+    },
+  },
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",

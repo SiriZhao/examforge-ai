@@ -1,13 +1,16 @@
 from collections.abc import Callable
 from pathlib import Path
+import unicodedata
 
 from PIL import Image
 
-from app.schemas.review import OCRConfig, ParsedFile, ParsedPage
+from app.schemas.review import DocumentBlock, OCRConfig, ParsedFile, ParsedPage
 from app.services.ocr_cache import load_ocr_cache, save_ocr_cache
 from app.services.ocr_service import OCRError, run_ocr_on_image, run_ocr_on_path
 from app.services.runtime_paths import find_poppler_path
+from app.services.structure_analyzer import analyze_document_structure, source_anchor
 from app.services.subprocess_utils import hide_subprocess_windows
+from app.services.text_quality import semantic_word_count
 
 SUPPORTED_PARSE_EXTENSIONS = {".pptx", ".pdf", ".docx", ".md", ".txt", ".png", ".jpg", ".jpeg"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
@@ -59,6 +62,7 @@ def parse_file(
         raise ParseError(f"解析 {path.name} 失败：{exc}") from exc
 
     raw_text = "\n\n".join(page.text for page in pages if page.text.strip())
+    document_structure = analyze_document_structure(path.name, suffix, pages, warnings)
     return ParsedFile(
         filename=path.name,
         file_type=suffix,
@@ -67,6 +71,7 @@ def parse_file(
         raw_text=raw_text,
         warnings=warnings,
         ocr_cache_used=cache_used,
+        document_structure=document_structure,
     )
 
 
@@ -79,7 +84,31 @@ def parse_docx(path: Path) -> list[ParsedPage]:
     document = Document(path)
     lines = [paragraph.text.strip() for paragraph in document.paragraphs]
     text = "\n".join(line for line in lines if line)
-    return [ParsedPage(page_number=1, text=text, source="text_extract")]
+    anchor = source_anchor(path.name, path.suffix, 1)
+    blocks: list[DocumentBlock] = []
+    for index, table in enumerate(document.tables, start=1):
+        rows = [[cell.text.strip() for cell in row.cells] for row in table.rows]
+        blocks.append(
+            DocumentBlock(
+                block_id=f"p1-table-{index}",
+                type="table",
+                page_number=1,
+                source_anchor=anchor,
+                rows=rows,
+                metadata={"native": True},
+            )
+        )
+    for index, _shape in enumerate(document.inline_shapes, start=1):
+        blocks.append(
+            DocumentBlock(
+                block_id=f"p1-image-{index}",
+                type="image",
+                page_number=1,
+                source_anchor=anchor,
+                metadata={"native": True, "image_index": index},
+            )
+        )
+    return [ParsedPage(page_number=1, text=text, source="text_extract", blocks=blocks)]
 
 
 def parse_pptx(path: Path) -> list[ParsedPage]:
@@ -92,7 +121,31 @@ def parse_pptx(path: Path) -> list[ParsedPage]:
     pages: list[ParsedPage] = []
     for index, slide in enumerate(presentation.slides, start=1):
         slide_text: list[str] = []
-        for shape in slide.shapes:
+        blocks: list[DocumentBlock] = []
+        anchor = source_anchor(path.name, path.suffix, index)
+        for shape_index, shape in enumerate(slide.shapes, start=1):
+            if getattr(shape, "has_table", False):
+                rows = [[cell.text.strip() for cell in row.cells] for row in shape.table.rows]
+                blocks.append(
+                    DocumentBlock(
+                        block_id=f"p{index}-table-{shape_index}",
+                        type="table",
+                        page_number=index,
+                        source_anchor=anchor,
+                        rows=rows,
+                        metadata={"native": True},
+                    )
+                )
+            if getattr(shape, "shape_type", None) == 13:
+                blocks.append(
+                    DocumentBlock(
+                        block_id=f"p{index}-image-{shape_index}",
+                        type="image",
+                        page_number=index,
+                        source_anchor=anchor,
+                        metadata={"native": True, "shape_index": shape_index},
+                    )
+                )
             if hasattr(shape, "text"):
                 text = shape.text.strip()
                 if text:
@@ -102,6 +155,7 @@ def parse_pptx(path: Path) -> list[ParsedPage]:
                 page_number=index,
                 text="\n".join(slide_text),
                 source="text_extract",
+                blocks=blocks,
             )
         )
     return pages
@@ -148,6 +202,7 @@ def parse_pdf(
     warnings: list[str] = []
     total_pages = len(reader.pages)
     text_pages: dict[int, str] = {}
+    image_counts: dict[int, int] = {}
     ocr_page_numbers: list[int] = []
 
     if progress_callback:
@@ -157,16 +212,27 @@ def parse_pdf(
         if progress_callback:
             progress_callback(f"正在检查 PDF 文本层：第 {index}/{total_pages} 页", min(0.2, index / max(total_pages, 1) * 0.2))
         text = (page.extract_text() or "").strip()
-        if len(text) >= PDF_TEXT_MIN_CHARS:
+        try:
+            image_counts[index] = len(getattr(page, "images", []) or [])
+        except Exception:
+            image_counts[index] = 0
+        if native_pdf_text_is_reliable(text):
             text_pages[index] = text
         else:
             ocr_page_numbers.append(index)
+            if len(text) >= PDF_TEXT_MIN_CHARS:
+                warnings.append(f"PDF 第 {index} 页文本层编码异常，已转入 OCR。")
 
     if not ocr_page_numbers:
         if progress_callback:
             progress_callback("已检测到文字版 PDF，跳过 OCR。", 0.35)
         return [
-            ParsedPage(page_number=index, text=text_pages.get(index, ""), source="text_extract")
+            ParsedPage(
+                page_number=index,
+                text=text_pages.get(index, ""),
+                source="text_extract",
+                blocks=pdf_image_blocks(path, index, image_counts.get(index, 0)),
+            )
             for index in range(1, total_pages + 1)
         ], warnings, False
 
@@ -195,10 +261,25 @@ def parse_pdf(
 
     for index in range(1, total_pages + 1):
         if index in text_pages:
-            pages.append(ParsedPage(page_number=index, text=text_pages[index], source="text_extract"))
+            pages.append(
+                ParsedPage(
+                    page_number=index,
+                    text=text_pages[index],
+                    source="text_extract",
+                    blocks=pdf_image_blocks(path, index, image_counts.get(index, 0)),
+                )
+            )
         elif index in ocr_text_by_page:
             warning = next((item for item in warnings if f"第 {index} 页" in item), None)
-            pages.append(ParsedPage(page_number=index, text=ocr_text_by_page[index], source="ocr_fallback", warning=warning))
+            pages.append(
+                ParsedPage(
+                    page_number=index,
+                    text=ocr_text_by_page[index],
+                    source="ocr_fallback",
+                    warning=warning,
+                    blocks=pdf_image_blocks(path, index, image_counts.get(index, 0)),
+                )
+            )
         else:
             pages.append(ParsedPage(page_number=index, text="", source="ocr_fallback", warning="快速模式跳过该扫描页。"))
 
@@ -206,6 +287,28 @@ def parse_pdf(
         save_ocr_cache(path, ocr_config, pages, page_count=total_pages)
 
     return pages, warnings, False
+
+
+def native_pdf_text_is_reliable(text: str) -> bool:
+    compact = "".join(char for char in (text or "") if not char.isspace())
+    # A mojibake marker is a warning signal, not proof that the entire native
+    # text layer is unusable. Some Chinese PDFs contain a few legacy-encoded
+    # glyphs while retaining enough readable text to be safer and more
+    # complete than sampling only a handful of OCR pages.
+    if len(compact) < PDF_TEXT_MIN_CHARS:
+        return False
+    unusual = sum(
+        1
+        for char in compact
+        if ord(char) > 0xFFFF
+        or unicodedata.category(char) in {"Co", "Cs", "Cn"}
+        or char == "\ufffd"
+    )
+    if unusual / max(len(compact), 1) > 0.005:
+        return False
+    semantic = semantic_word_count(text)
+    readable = sum(char.isalnum() or "\u3400" <= char <= "\u9fff" for char in compact)
+    return semantic >= 2 and readable / max(len(compact), 1) >= 0.35
 
 
 def select_ocr_pages(page_numbers: list[int], total_pages: int, mode: str) -> list[int]:
@@ -220,7 +323,37 @@ def select_ocr_pages(page_numbers: list[int], total_pages: int, mode: str) -> li
 
 def parse_image(path: Path, ocr_config: OCRConfig) -> list[ParsedPage]:
     text = run_ocr_on_path(path, ocr_config)
-    return [ParsedPage(page_number=1, text=text, source="ocr_fallback")]
+    return [
+        ParsedPage(
+            page_number=1,
+            text=text,
+            source="ocr_fallback",
+            blocks=[
+                DocumentBlock(
+                    block_id="p1-image-1",
+                    type="image",
+                    page_number=1,
+                    source_anchor=source_anchor(path.name, path.suffix, 1),
+                    metadata={"native": True, "filename": path.name},
+                    confidence=0.8,
+                )
+            ],
+        )
+    ]
+
+
+def pdf_image_blocks(path: Path, page_number: int, count: int) -> list[DocumentBlock]:
+    anchor = source_anchor(path.name, path.suffix, page_number)
+    return [
+        DocumentBlock(
+            block_id=f"p{page_number}-image-{index}",
+            type="image",
+            page_number=page_number,
+            source_anchor=anchor,
+            metadata={"native": True, "image_index": index},
+        )
+        for index in range(1, count + 1)
+    ]
 
 
 def render_pdf_page_to_image(path: Path, page_number: int) -> Image.Image:

@@ -96,9 +96,46 @@ def export_docx(report: ReviewReport, output_dir: Path, basename: str) -> Path:
 
 
 def add_markdown_to_docx(document: Document, markdown: str) -> None:
-    for raw_line in markdown.splitlines():
+    lines = markdown.splitlines()
+    index = 0
+    in_code = False
+    code_lines: list[str] = []
+    while index < len(lines):
+        raw_line = lines[index]
+        if raw_line.strip().startswith("```"):
+            if in_code:
+                paragraph = document.add_paragraph()
+                run = paragraph.add_run("\n".join(code_lines))
+                run.font.name = "Consolas"
+                code_lines = []
+                in_code = False
+            else:
+                in_code = True
+            index += 1
+            continue
+        if in_code:
+            code_lines.append(raw_line)
+            index += 1
+            continue
         line = raw_line.strip()
         if not line:
+            index += 1
+            continue
+        if line.startswith("|"):
+            rows = []
+            while index < len(lines) and lines[index].strip().startswith("|"):
+                cells = [cell.strip() for cell in lines[index].strip().strip("|").split("|")]
+                if not cells or all(set(cell) <= {"-", ":", " "} for cell in cells):
+                    index += 1
+                    continue
+                rows.append(cells)
+                index += 1
+            if rows:
+                table = document.add_table(rows=len(rows), cols=max(len(row) for row in rows))
+                table.style = "Table Grid"
+                for row_index, row in enumerate(rows):
+                    for col_index, cell in enumerate(row):
+                        table.cell(row_index, col_index).text = cell
             continue
         if line.startswith("#"):
             level = min(len(line) - len(line.lstrip("#")), 3)
@@ -111,6 +148,11 @@ def add_markdown_to_docx(document: Document, markdown: str) -> None:
             document.add_paragraph(line)
         else:
             document.add_paragraph(line)
+        index += 1
+    if code_lines:
+        paragraph = document.add_paragraph()
+        run = paragraph.add_run("\n".join(code_lines))
+        run.font.name = "Consolas"
 
 
 def export_pdf(markdown: str, output_dir: Path, basename: str) -> Path:

@@ -377,7 +377,7 @@ def test_very_long_text_triggers_chunk_summarize(monkeypatch) -> None:
     calls = {"summary": 0, "final": 0}
 
     def fake_post(url, json, headers, timeout):
-        if "max_tokens" in json:
+        if json.get("max_tokens") == 1200:
             calls["summary"] += 1
             return httpx.Response(
                 200,
@@ -412,7 +412,7 @@ def test_chunk_summary_failure_uses_local_chunk_insight(monkeypatch) -> None:
     )
 
     def fake_post(url, json, headers, timeout):
-        if "max_tokens" in json:
+        if json.get("max_tokens") == 1200:
             raise httpx.TimeoutException("timeout")
         return llm_response_for(report)
 

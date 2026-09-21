@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
-from app.routers import analyze, download, export, generate_review, generate_review_jobs, llm, mock_exam, parse, review_projects, upload
+from app.routers import analyze, download, export, generate_review, generate_review_jobs_v31, llm, mock_exam, parse, review_projects, upload
 from app.services.cloud_runtime import (
     cleanup_runtime_files,
     ensure_runtime_directories,
@@ -44,7 +44,7 @@ app.add_middleware(
 app.include_router(upload.router, tags=["upload"])
 app.include_router(parse.router, tags=["parse"])
 app.include_router(generate_review.router, tags=["generate-review"])
-app.include_router(generate_review_jobs.router, tags=["generate-review"])
+app.include_router(generate_review_jobs_v31.router, tags=["generate-review"])
 app.include_router(llm.router)
 app.include_router(mock_exam.router, tags=["mock-exam"])
 app.include_router(download.router, tags=["download"])

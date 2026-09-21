@@ -8,6 +8,9 @@
 *.db
 *.sqlite
 *.sqlite3
+*.db-*
+*.sqlite-*
+*.sqlite3-*
 *.tmp
 *.bak
 
@@ -17,6 +20,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 **/.pytest_cache/
+.pytest-tmp*/
+**/.pytest-tmp*/
+test-tmp-root/
+**/test-tmp-root/
 .venv/
 venv/
 backend/.venv/
@@ -51,6 +58,15 @@ cache/
 !backend/cache/ocr/
 backend/cache/ocr/*
 !backend/cache/ocr/.gitkeep
+
+# Local runtime diagnostics and generated acceptance artifacts
+*.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+backend/diagnostics/
+backend/runtime/
 
 # OCR data
 backend/ocr_data/tessdata/*.traineddata

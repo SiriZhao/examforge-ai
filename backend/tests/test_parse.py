@@ -7,8 +7,9 @@ from app.config import settings
 from app.main import app
 from app.schemas.review import OCRConfig, ParsedFile, ParsedPage
 from app.services import file_parser
-from app.services.chapter_extractor import is_bad_unit_title
+from app.services.chapter_extractor import detect_chapter_title, is_bad_unit_title
 from app.services.subprocess_utils import subprocess_no_window_kwargs
+from app.services.file_parser import native_pdf_text_is_reliable
 
 
 def test_parse_endpoint_returns_unified_structure(
@@ -159,6 +160,10 @@ def test_windows_subprocess_kwargs_hide_console(monkeypatch) -> None:
     assert kwargs["creationflags"] != 0
     assert kwargs["startupinfo"].dwFlags != 0
 
+def test_arabic_major_chapter_marker_survives_title_cleaning() -> None:
+    title = detect_chapter_title(chr(31532) + "1" + chr(31456) + " " + chr(34892) + chr(21015) + chr(24335))
+    assert title == chr(31532) + "1" + chr(31456) + " " + chr(34892) + chr(21015) + chr(24335)
+
 
 def test_pdf_with_text_layer_skips_ocr(tmp_path: Path, monkeypatch) -> None:
     pdf_path = tmp_path / "text-layer.pdf"
@@ -187,6 +192,12 @@ def test_pdf_with_text_layer_skips_ocr(tmp_path: Path, monkeypatch) -> None:
     assert parsed.ocr_cache_used is False
     assert calls["ocr"] == 0
     assert any("跳过 OCR" in message for message in messages)
+
+
+def test_native_pdf_text_with_legacy_marker_is_retained() -> None:
+    text = "锟斤拷 线性代数 矩阵 行列式 向量空间 定义与性质。"
+
+    assert native_pdf_text_is_reliable(text) is True
 
 
 def test_scanned_pdf_uses_ocr_cache_on_second_parse(tmp_path: Path, monkeypatch) -> None:

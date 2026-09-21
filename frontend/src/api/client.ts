@@ -216,6 +216,9 @@ export type GenerationSummary = {
   mock_questions_count: number;
   anki_cards_count: number;
   llm_calls: number;
+  retry_count?: number;
+  chapter_count?: number;
+  chunk_count?: number;
   fallback_used: boolean;
   final_report_source: string;
   notes: string[];
@@ -270,7 +273,7 @@ export type GenerateReviewResponse = {
     | "llm_enhanced"
     | "llm_markdown_fallback"
     | "rule_based_with_llm_failed";
-  llm_status?: "disabled" | "success" | "failed";
+  llm_status?: "disabled" | "success" | "partial" | "failed";
   fallback_used?: boolean;
   llm_error?: LLMErrorInfo | null;
   llm_context_strategy?: "disabled" | "direct" | "compressed" | "chunked" | "failed";
@@ -279,11 +282,14 @@ export type GenerateReviewResponse = {
 
 export type GenerateReviewJob = {
   job_id: string;
-  status: "pending" | "parsing" | "ocr" | "building_evidence" | "llm" | "validating" | "exporting" | "completed" | "failed" | "queued" | "running";
+  status: "pending" | "parsing" | "ocr" | "building_evidence" | "llm" | "validating" | "completed" | "partial" | "retrying" | "retryable_failed" | "failed" | "queued" | "running";
   progress: number;
   message: string;
   result: GenerateReviewResponse | null;
   error: string | null;
+  error_code?: string | null;
+  retryable?: boolean;
+  retry_count?: number;
   created_at: string;
   updated_at: string;
 };
@@ -291,6 +297,7 @@ export type GenerateReviewJob = {
 export type GenerateReviewParams = {
   files: string[];
   export_format?: ExportFormat;
+  project_id?: string;
   export_formats?: ExportFormat[];
   title: string;
   course_name?: string;
@@ -335,16 +342,16 @@ export async function reoptimizeReview(params: {
   });
 }
 
-export async function createGenerateReviewJob(params: GenerateReviewParams): Promise<{ job_id: string }> {
-  return request<{ job_id: string }>("/review/jobs", {
+export async function createGenerateReviewJob(params: GenerateReviewParams): Promise<{ job_id: string; resumed?: boolean }> {
+  return request<{ job_id: string; resumed?: boolean }>("/review/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
 }
 
-export async function getGenerateReviewJob(jobId: string): Promise<GenerateReviewJob> {
-  return request<GenerateReviewJob>(`/review/jobs/${jobId}`, { method: "GET" });
+export async function getGenerateReviewJob(jobId: string, signal?: AbortSignal): Promise<GenerateReviewJob> {
+  return request<GenerateReviewJob>(`/review/jobs/${jobId}`, { method: "GET", signal });
 }
 
 export function downloadUrl(downloadPath: string): string {
@@ -368,6 +375,7 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
       url: path,
       method: options.method,
       data: options.body,
+      signal: options.signal || undefined,
       headers: options.headers as Record<string, string> | undefined,
     });
     return response.data;

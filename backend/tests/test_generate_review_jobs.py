@@ -6,7 +6,7 @@ from app.schemas.review import GenerateReviewResponse, ReviewReport
 
 
 def test_generate_review_job_status_flow(monkeypatch) -> None:
-    def fake_build_generate_review_response(request, progress_callback=None):
+    def fake_build_generate_review_response(request, progress_callback=None, **_kwargs):
         if progress_callback:
             progress_callback(42, "正在测试进度")
         return GenerateReviewResponse(
@@ -27,7 +27,7 @@ def test_generate_review_job_status_flow(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "app.routers.generate_review_jobs.build_generate_review_response",
+        "app.routers.generate_review_jobs_v31.build_generate_review_response",
         fake_build_generate_review_response,
     )
 
@@ -52,7 +52,7 @@ def test_generate_review_job_status_flow(monkeypatch) -> None:
 
 
 def test_generate_review_job_api_alias(monkeypatch) -> None:
-    def fake_build_generate_review_response(request, progress_callback=None):
+    def fake_build_generate_review_response(request, progress_callback=None, **_kwargs):
         return GenerateReviewResponse(
             review_report=ReviewReport(
                 title="Cloud",
@@ -71,7 +71,7 @@ def test_generate_review_job_api_alias(monkeypatch) -> None:
         )
 
     monkeypatch.setattr(
-        "app.routers.generate_review_jobs.build_generate_review_response",
+        "app.routers.generate_review_jobs_v31.build_generate_review_response",
         fake_build_generate_review_response,
     )
 

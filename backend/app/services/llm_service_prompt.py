@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from app.config import settings
 from app.schemas.review import DetailLevel, ExamType, OutputStyle, ReviewReport, StudyGoal
+from app.services.chunking import split_semantic_chunks
+from app.templates import get_prompt_template
 
 MAX_LLM_INPUT_CHARS = settings.llm_context_budget_chars
 MAX_CHUNK_CHARS = settings.llm_chunk_chars
@@ -59,11 +61,12 @@ def build_review_prompt(
 ) -> str:
     evidence_limit = 18000 if chunk_insights else 24000
     evidence_json = json.dumps(evidence_pack, ensure_ascii=False)[:evidence_limit]
-    insights = "\n\n".join(f"[chunk_insight {index + 1}]\n{item}" for index, item in enumerate(chunk_insights))
+    insights = compact_chunk_insights(chunk_insights, 22000)
     goal_instruction = build_study_goal_instruction(study_goal)
     exam_instruction = build_exam_type_instruction(exam_type)
     detail_instruction = build_detail_level_instruction(detail_level)
     style_instruction = build_output_style_instruction(output_style)
+    prompt_mode, mode_instruction = get_prompt_template(study_goal, output_style)
     return f"""
 用户复习目标：{study_goal}
 目标策略：{goal_instruction}
@@ -73,6 +76,8 @@ def build_review_prompt(
 详细度策略：{detail_instruction}
 输出风格：{output_style}
 风格策略：{style_instruction}
+v3.2 Prompt 模式：{prompt_mode}
+模式模板：{mode_instruction}
 
 v0.6.0 输出要求：
 - 报告必须体现复习目标和考试类型差异。
@@ -198,10 +203,7 @@ def build_compact_review_prompt(
     draft_limit = max(6000, int(target_budget * 0.2))
     compact_pack = compact_evidence_pack(evidence_pack)
     evidence_json = json.dumps(compact_pack, ensure_ascii=False)[:evidence_limit]
-    insights_text = "\n\n".join(
-        f"[chunk_insight {index + 1}]\n{item[:2500]}"
-        for index, item in enumerate(chunk_insights[: settings.llm_max_chunks_per_round])
-    )[:insight_limit]
+    insights_text = compact_chunk_insights(chunk_insights, insight_limit)
     return f"""
 你是资深课程助教和期末复习教练。上一轮输入接近或超过模型上下文限制，现在请使用压缩后的证据完成最终合成，不要退回普通摘要。
 
@@ -272,6 +274,29 @@ def compact_evidence_pack(evidence_pack: dict) -> dict:
     }
 
 
+def compact_chunk_insights(insights: list[str], limit: int) -> str:
+    """Give every chunk a bounded share, removing repeated lines across adjacent summaries."""
+    if not insights or limit <= 0:
+        return ""
+    per_chunk = max(40, (limit - len(insights) * 28) // len(insights))
+    seen: set[str] = set()
+    sections: list[str] = []
+    for index, insight in enumerate(insights, start=1):
+        unique_lines: list[str] = []
+        for raw in insight.splitlines():
+            line = raw.strip()
+            if not line:
+                continue
+            key = re.sub(r"\s+", " ", line).casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_lines.append(line)
+        content = "\n".join(unique_lines)[:per_chunk]
+        sections.append(f"[chunk_insight {index}]\n{content}")
+    return "\n\n".join(sections)[:limit]
+
+
 def build_chunk_summary_prompt(chunk: str, chunk_index: int, total_chunks: int) -> str:
     return f"""
 请把下面的材料分块理解为 chunk_insight，不要只写摘要。
@@ -288,7 +313,9 @@ def build_chunk_summary_prompt(chunk: str, chunk_index: int, total_chunks: int) 
 7. 可能题型，题型名称由材料决定；
 8. 可转 Anki 的问答；
 9. 原文证据片段。
+10. 章节标题与来源页码锚点。
 
+标注为“承接上文”的内容只用于理解当前块，不要再次总结，避免跨块重复。
 请避免照抄 OCR 乱码，遇到疑似错字请根据上下文修正。
 
 材料分块：
@@ -455,37 +482,12 @@ def build_context_from_chunk_summaries(
 
 
 def split_material_chunks(text: str) -> list[str]:
-    paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
-    if not paragraphs:
-        paragraphs = [text]
-
-    chunks: list[str] = []
-    current: list[str] = []
-    current_len = 0
-    for paragraph in paragraphs:
-        if len(paragraph) > MAX_CHUNK_CHARS:
-            if current:
-                chunks.append("\n\n".join(current))
-                current = []
-                current_len = 0
-            step = max(1, MAX_CHUNK_CHARS - MAX_CHUNK_OVERLAP_CHARS)
-            for start in range(0, len(paragraph), step):
-                chunks.append(paragraph[start : start + MAX_CHUNK_CHARS])
-            continue
-
-        next_len = current_len + len(paragraph) + 2
-        if current and next_len > MAX_CHUNK_CHARS:
-            chunks.append("\n\n".join(current))
-            current = [paragraph]
-            current_len = len(paragraph)
-        else:
-            current.append(paragraph)
-            current_len = next_len
-
-    if current:
-        chunks.append("\n\n".join(current))
-
-    return sorted(chunks, key=score_chunk, reverse=True)[:MAX_CHUNKS]
+    semantic_chunks = split_semantic_chunks(
+        text,
+        max_chars=MAX_CHUNK_CHARS,
+        overlap_chars=MAX_CHUNK_OVERLAP_CHARS,
+    )
+    return [chunk.text for chunk in semantic_chunks]
 
 
 def build_structured_context(text: str, safe_draft: ReviewReport, limit: int) -> str:

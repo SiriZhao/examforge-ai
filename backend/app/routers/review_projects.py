@@ -8,8 +8,9 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, create_engine, select
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, create_engine, delete, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from app.config import settings
@@ -190,7 +191,23 @@ def create_workspace(payload: WorkspaceCreate, db: Session = Depends(db_session)
 @router.get("/projects")
 def list_projects(workspace: Workspace = Depends(current_workspace), db: Session = Depends(db_session)):
     projects = db.scalars(select(ReviewProject).where(ReviewProject.workspace_id == workspace.id).order_by(ReviewProject.created_at.desc())).all()
-    return [{"id": item.id, "course_name": item.course_name, "exam_date": item.exam_date, "exam_type": item.exam_type, "daily_minutes": item.daily_minutes, "mastery_level": item.mastery_level} for item in projects]
+    project_ids = [item.id for item in projects]
+    files_by_project: dict[str, list[dict]] = {}
+    if project_ids:
+        files = db.scalars(select(ProjectFile).where(ProjectFile.project_id.in_(project_ids))).all()
+        for file in files:
+            files_by_project.setdefault(file.project_id, []).append({
+                "id": file.id, "saved_filename": file.saved_filename,
+                "original_filename": file.original_filename, "role": file.role,
+                "pages": file.page_count,
+            })
+    return [{
+        "id": item.id, "course_name": item.course_name, "exam_date": item.exam_date,
+        "exam_type": item.exam_type, "daily_minutes": item.daily_minutes,
+        "mastery_level": item.mastery_level, "target_score": item.target_score,
+        "focus": item.focus, "created_at": item.created_at.replace(tzinfo=timezone.utc).isoformat(),
+        "files": files_by_project.get(item.id, []),
+    } for item in projects]
 
 
 @router.post("/projects", status_code=201)
@@ -199,6 +216,33 @@ def create_project(payload: ProjectCreate, workspace: Workspace = Depends(curren
     db.add(project)
     db.commit()
     return {"id": project.id, **payload.model_dump()}
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+def delete_project(project_id: str, workspace: Workspace = Depends(current_workspace), db: Session = Depends(db_session)) -> Response:
+    project = owned_project(db, workspace, project_id)
+    saved_filenames = list(db.scalars(select(ProjectFile.saved_filename).where(ProjectFile.project_id == project.id)).all())
+    report_ids = list(db.scalars(select(Report.id).where(Report.project_id == project.id)).all())
+    if report_ids:
+        db.execute(delete(ReportVersion).where(ReportVersion.report_id.in_(report_ids)))
+        db.execute(delete(ReportModule).where(ReportModule.report_id.in_(report_ids)))
+        db.execute(delete(Report).where(Report.id.in_(report_ids)))
+    db.execute(delete(ProjectFile).where(ProjectFile.project_id == project.id))
+    db.delete(project)
+    db.commit()
+
+    upload_root = runtime_dir(settings.upload_dir).resolve()
+    for saved_filename in saved_filenames:
+        candidate = (upload_root / Path(saved_filename).name).resolve()
+        try:
+            candidate.relative_to(upload_root)
+        except ValueError:
+            continue
+        try:
+            candidate.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return Response(status_code=204)
 
 
 @router.post("/projects/{project_id}/upload", status_code=201)

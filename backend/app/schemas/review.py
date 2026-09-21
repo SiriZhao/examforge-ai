@@ -41,11 +41,55 @@ class ParseRequest(BaseModel):
     ocr_config: OCRConfig = Field(default_factory=OCRConfig)
 
 
+DocumentBlockType = Literal["title", "text", "table", "image", "formula"]
+ProcessingStatus = Literal["processed", "processed_with_warning", "skipped_with_reason", "failed_with_reason"]
+
+
+class DocumentBlock(BaseModel):
+    block_id: str
+    type: DocumentBlockType
+    page_number: int
+    source_anchor: str
+    text: str = ""
+    rows: list[list[str]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    confidence: float = Field(default=1.0, ge=0, le=1)
+
+
+class DocumentSection(BaseModel):
+    section_id: str
+    title: str
+    level: int = Field(default=1, ge=1, le=6)
+    parent_id: str | None = None
+    child_ids: list[str] = Field(default_factory=list)
+    page_start: int
+    page_end: int
+    block_ids: list[str] = Field(default_factory=list)
+    source_anchor: str
+
+
+class DocumentStructure(BaseModel):
+    schema_version: Literal["3.2"] = "3.2"
+    document_id: str
+    filename: str
+    file_type: str
+    title: str
+    page_count: int
+    sections: list[DocumentSection] = Field(default_factory=list)
+    blocks: list[DocumentBlock] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ParsedPage(BaseModel):
     page_number: int
     text: str
     source: Literal["text_extract", "ocr_fallback"]
     warning: str | None = None
+    title: str | None = None
+    source_anchor: str | None = None
+    status: ProcessingStatus = "processed"
+    confidence: float = Field(default=1.0, ge=0, le=1)
+    blocks: list[DocumentBlock] = Field(default_factory=list)
 
 
 class ParsedFile(BaseModel):
@@ -56,6 +100,7 @@ class ParsedFile(BaseModel):
     raw_text: str
     warnings: list[str] = Field(default_factory=list)
     ocr_cache_used: bool = False
+    document_structure: DocumentStructure | None = None
 
 
 class ParseResponse(BaseModel):
@@ -120,6 +165,18 @@ LLMErrorCode = Literal[
     "RESPONSE_PARSE_ERROR",
     "QUALITY_FAILED",
     "UNKNOWN_ERROR",
+    "LLM_OUTPUT_TRUNCATED",
+    "LLM_CONTEXT_EXCEEDED",
+    "LLM_TIMEOUT",
+    "LLM_PROVIDER_ERROR",
+    "LLM_RESPONSE_PARSE_ERROR",
+    "PROVIDER_RATE_LIMIT",
+    "PROVIDER_QUOTA_EXCEEDED",
+    "GENERATION_PERSIST_ERROR",
+    "EXPORT_RENDER_ERROR",
+    "EXPORT_FILE_WRITE_ERROR",
+    "LLM_STAGE_FAILED",
+    "INVALID_CANONICAL",
 ]
 
 ReportSource = Literal[
@@ -129,8 +186,8 @@ ReportSource = Literal[
     "llm_markdown_fallback",
     "rule_based_with_llm_failed",
 ]
-LLMStatus = Literal["disabled", "success", "failed"]
-LLMContextStrategy = Literal["disabled", "direct", "compressed", "chunked", "failed"]
+LLMStatus = Literal["disabled", "success", "failed", "partial"]
+LLMContextStrategy = Literal["disabled", "direct", "compressed", "chunked", "hierarchical", "failed"]
 
 
 class LLMErrorInfo(BaseModel):
@@ -157,6 +214,7 @@ class LLMTestResponse(BaseModel):
 
 class GenerateReviewRequest(BaseModel):
     files: list[str]
+    project_id: str | None = None
     export_format: ExportFormat = "md"
     export_formats: list[ExportFormat] | None = None
     title: str = "期末复习资料包"
@@ -293,6 +351,10 @@ class ReportQuality(BaseModel):
     quality_warnings: list[str] = Field(default_factory=list)
     quality_failures: list[str] = Field(default_factory=list)
     repairable: bool = True
+    section_coverage_ratio: float = Field(default=1.0, ge=0, le=1)
+    missing_sections: list[str] = Field(default_factory=list)
+    duplicate_sections: list[str] = Field(default_factory=list)
+    is_empty: bool = False
 
 
 class GenerationSummary(BaseModel):
@@ -308,6 +370,9 @@ class GenerationSummary(BaseModel):
     mock_questions_count: int = 0
     anki_cards_count: int = 0
     llm_calls: int = 0
+    retry_count: int = 0
+    chapter_count: int = 0
+    chunk_count: int = 0
     fallback_used: bool = False
     final_report_source: ReportSource = "rule_based"
     notes: list[str] = Field(default_factory=list)
@@ -344,7 +409,7 @@ class ReviewReport(BaseModel):
 class GenerateReviewResponse(BaseModel):
     review_report: ReviewReport
     markdown: str
-    download_path: str
+    download_path: str = ""
     download_links: dict[ExportFormat, str] = Field(default_factory=dict)
     anki_csv_download_path: str | None = None
     export_format: ExportFormat

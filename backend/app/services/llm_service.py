@@ -32,6 +32,9 @@ class LLMEnhancementResult:
     llm_context_strategy: LLMContextStrategy
 
 
+    llm_calls: int = 0
+    retry_count: int = 0
+    chunk_count: int = 0
 def generate_review_summary(
     parsed_materials: str,
     safe_draft: ReviewReport,

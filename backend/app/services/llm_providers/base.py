@@ -52,3 +52,11 @@ class BaseLLMProvider(ABC):
     @abstractmethod
     def test_connection(self, config: LLMConfig) -> str:
         raise NotImplementedError
+
+    def generate_stage(self, stage: str, prompt: str, config: LLMConfig, *, max_output_tokens: int) -> str:
+        """LLM-native generation hook used by the v4 pipeline.
+
+        Providers that do not support it fail explicitly; the pipeline never
+        silently substitutes a deterministic StudyUnit.
+        """
+        raise NotImplementedError(f"Provider {self.name} does not implement stage generation")

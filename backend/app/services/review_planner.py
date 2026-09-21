@@ -336,7 +336,10 @@ def dedupe_anki_cards(cards: list[AnkiCard]) -> list[AnkiCard]:
             continue
         card.front = front[:120]
         card.back = clean_text(card.back)
-        if len(card.back) < 18 or is_generic_anki_back(card.back):
+        # A sound flashcard answer is often deliberately short (a formula,
+        # definition, or symbol). Do not discard it merely for being concise;
+        # exporters must preserve every canonical non-empty card.
+        if not card.back or is_generic_anki_back(card.back):
             continue
         card.tags = card.tags if isinstance(card.tags, str) else " ".join(card.tags)
         card.tags = " ".join(clean_topic_list(str(card.tags).split(), limit=6)) or "ExamForge"

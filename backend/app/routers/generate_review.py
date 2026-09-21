@@ -21,10 +21,12 @@ from app.services.export_service import (
 )
 from app.services.cloud_runtime import runtime_dir
 from app.services.file_parser import ParseError, parse_file
+from app.services.generation_diagnostics import diagnostic
+from app.services.generation_pipeline import generate_hierarchical_report
 from app.services.generator import generate_markdown_review
 from app.services.llm_service import generate_review_summary
-from app.services.llm_service_prompt import MAX_LLM_INPUT_CHARS
 from app.services.llm_quality import validate_report_quality
+from app.services.knowledge_extractor import build_generation_material
 from app.services.ocr_service import OCRError
 from app.services.review_planner import generate_review_report
 from app.services.upload_resolver import (
@@ -128,13 +130,23 @@ def reoptimize_review(request: ReoptimizeReviewRequest) -> ReoptimizeReviewRespo
 def build_generate_review_response(
     request: GenerateReviewRequest,
     progress_callback: ProgressCallback | None = None,
+    *,
+    job_id: str = "direct",
+    parsed_files_checkpoint: list[dict] | None = None,
+    parsed_callback: Callable[[list[dict]], None] | None = None,
+    checkpoints: dict[str, dict] | None = None,
+    checkpoint_callback: Callable | None = None,
+    defer_exports: bool = False,
 ) -> GenerateReviewResponse:
     if not request.files:
         raise HTTPException(status_code=400, detail="请至少上传一个文件后再生成复习资料。")
 
-    parsed_files = []
+    from app.schemas.review import ParsedFile
+    parsed_files = [
+        ParsedFile.model_validate(item) for item in (parsed_files_checkpoint or [])
+    ]
     total_files = len(request.files)
-    for file_index, file_ref in enumerate(request.files, start=1):
+    for file_index, file_ref in enumerate([] if parsed_files else request.files, start=1):
         try:
             if progress_callback:
                 progress_callback(
@@ -162,48 +174,78 @@ def build_generate_review_response(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except (ParseError, OCRError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if parsed_callback and not parsed_files_checkpoint:
+        try:
+            parsed_callback([item.model_dump(mode="json") for item in parsed_files])
+            diagnostic(
+                "parse_persisted",
+                job_id=job_id,
+                source_page_count=sum(len(item.pages) for item in parsed_files),
+                extracted_text_character_count=sum(len(item.raw_text) for item in parsed_files),
+                persistence_status="success",
+            )
+        except Exception as exc:
+            diagnostic("parse_persist_failed", job_id=job_id, exception_type=type(exc).__name__, exception_message=str(exc)[:200])
+            raise RuntimeError("GENERATION_PERSIST_ERROR: parsed material checkpoint could not be saved") from exc
 
-    combined_text = "\n\n".join(parsed.raw_text for parsed in parsed_files)
-    file_texts = [(parsed.filename, parsed.raw_text) for parsed in parsed_files]
+
+    if progress_callback:
+        progress_callback(66, "正在分析标题、章节树、页码、表格和图片。")
+    combined_text, file_texts, knowledge = build_generation_material(parsed_files)
     report_title = request.course_name or request.title
 
     if progress_callback:
-        progress_callback(68, "正在构建本地安全底稿：提取材料结构、题干线索、关键词和高频考点。")
-    logger.info("Safe draft generation started: file_count=%s", len(parsed_files))
-    safe_draft = generate_review_report(
-        combined_text,
-        title=report_title,
-        file_texts=file_texts,
-        study_goal=request.study_goal,
-        exam_type=request.exam_type,
-    )
-    safe_draft.detail_level = request.detail_level
-    safe_draft.output_style = request.output_style
-    logger.info("Safe draft generation completed: chapter_count=%s", len(safe_draft.chapters))
+        progress_callback(
+            68,
+            f"正在提取知识：已识别 {len(knowledge.topics)} 个章节节点、"
+            f"{len(knowledge.formulas)} 条公式和 {len(knowledge.tables)} 个表格。",
+        )
+    llm_config = with_server_default_llm(request.llm_config)
+    safe_draft = None
+    # A deterministic report is deliberately delayed until offline mode (or an
+    # explicit catastrophic provider fallback). It is not the AI input.
+    if not llm_config.enabled:
+        logger.info("Offline/basic review selected; generating deterministic fallback.")
+        safe_draft = generate_review_report(
+            combined_text, title=report_title, file_texts=file_texts,
+            study_goal=request.study_goal, exam_type=request.exam_type,
+        )
+        safe_draft.detail_level = request.detail_level
+        safe_draft.output_style = request.output_style
 
     if progress_callback:
         if request.llm_config.enabled:
-            if len(combined_text) > MAX_LLM_INPUT_CHARS:
-                progress_callback(
-                    78,
-                    "资料较长，正在进行分块理解与全局重组。系统会先提取题干、考点、定义、公式和 Anki 候选，再进行 AI 深度整理。",
-                )
-            else:
-                progress_callback(78, "正在调用大模型进行 AI 深度整理，通常需要几十秒。")
+            progress_callback(
+                78,
+                "正在进行 AI 深度整理：先理解证据，再建立课程模型、学习蓝图并完成全局合成。",
+            )
         else:
             progress_callback(78, "正在生成本地安全底稿。")
 
-    llm_result = generate_review_summary(
-        combined_text,
-        safe_draft,
-        with_server_default_llm(request.llm_config),
-        course_name=report_title,
-        file_texts=file_texts,
-        study_goal=request.study_goal,
-        exam_type=request.exam_type,
-        detail_level=request.detail_level,
-        output_style=request.output_style,
-    )
+    try:
+        llm_result, pipeline_stats = generate_hierarchical_report(
+            parsed_files, safe_draft, llm_config, job_id=job_id,
+            checkpoints=checkpoints, checkpoint_callback=checkpoint_callback,
+            progress_callback=progress_callback, study_goal=request.study_goal,
+            exam_type=request.exam_type, detail_level=request.detail_level,
+            output_style=request.output_style, title=report_title,
+        )
+    except Exception as exc:
+        if not llm_config.enabled:
+            raise
+        logger.warning("AI pipeline failed; entering explicit Basic Offline Review fallback: %s", str(exc)[:200])
+        fallback = generate_review_report(
+            combined_text, title=report_title, file_texts=file_texts,
+            study_goal=request.study_goal, exam_type=request.exam_type,
+        )
+        fallback.detail_level = request.detail_level
+        fallback.output_style = request.output_style
+        from app.services.llm_service import LLMEnhancementResult
+        llm_result = LLMEnhancementResult(
+            report=fallback, report_source="rule_based_with_llm_failed", llm_status="failed",
+            fallback_used=True, llm_error=None, llm_context_strategy="failed",
+        )
+        pipeline_stats = type("FallbackStats", (), {"chunk_count": 0})()
     report = llm_result.report
     report.study_goal = request.study_goal
     report.exam_type = request.exam_type
@@ -219,34 +261,33 @@ def build_generate_review_response(
     report.quality = quality.to_model()
 
     if progress_callback:
-        progress_callback(86, "正在生成 Markdown / Word / PDF 下载文件。")
-    markdown = generate_markdown_review(report)
+        progress_callback(94, "AI 生成已完成，正在保存可重复导出的学习内容。")
+    markdown = report.markdown or generate_markdown_review(report)
     export_formats = request.export_formats or [request.export_format]
     if "md" not in export_formats:
         export_formats = ["md", *export_formats]
 
     download_links = {}
     anki_csv_download_path = None
-    try:
-        output_dir = runtime_dir(settings.output_dir)
-        anki_path = export_anki_csv(report, output_dir, anki_download_filename(report_title))
-        anki_csv_download_path = download_url(anki_path.name)
-        for export_index, export_format in enumerate(export_formats, start=1):
-            if progress_callback:
-                export_progress = 86 + int((export_index / max(len(export_formats), 1)) * 12)
-                progress_callback(export_progress, f"正在导出 {export_format.upper()} 文件。")
-            logger.info("Export started: format=%s", export_format)
-            output_path = export_review_report(
-                report=report,
-                markdown=markdown,
-                output_dir=output_dir,
-                basename=report_download_filename(report_title, export_format).rsplit(".", 1)[0],
-                export_format=export_format,
-            )
-            download_links[export_format] = download_url(output_path.name)
-            logger.info("Export completed: format=%s filename=%s", export_format, output_path.name)
-    except ExportError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not defer_exports:
+        try:
+            output_dir = runtime_dir(settings.output_dir)
+            anki_path = export_anki_csv(report, output_dir, anki_download_filename(report_title))
+            anki_csv_download_path = download_url(anki_path.name)
+            for export_format in export_formats:
+                logger.info("Export started: format=%s", export_format)
+                output_path = export_review_report(
+                    report=report,
+                    markdown=markdown,
+                    output_dir=output_dir,
+                    basename=report_download_filename(report_title, export_format).rsplit(".", 1)[0],
+                    export_format=export_format,
+                )
+                download_links[export_format] = download_url(output_path.name)
+                logger.info("Export completed: format=%s filename=%s", export_format, output_path.name)
+        except ExportError as exc:
+            diagnostic("export_failed", job_id=job_id, export_status="failed", exception_type=type(exc).__name__, exception_message=str(exc)[:200])
+            raise HTTPException(status_code=500, detail=f"EXPORT_RENDER_ERROR: {exc}") from exc
 
     if progress_callback:
         progress_callback(100, "已完成。")
@@ -254,7 +295,7 @@ def build_generate_review_response(
     return GenerateReviewResponse(
         review_report=report,
         markdown=markdown,
-        download_path=download_links.get(request.export_format) or next(iter(download_links.values())),
+        download_path=download_links.get(request.export_format) or next(iter(download_links.values()), ""),
         download_links=download_links,
         anki_csv_download_path=anki_csv_download_path,
         export_format=request.export_format,
@@ -279,7 +320,7 @@ def build_generation_summary(parsed_files, report, llm_result) -> GenerationSumm
     if pages_text and not pages_ocr:
         notes.append("已检测到文字版 PDF 或可直接提取文本的材料，跳过不必要 OCR。")
     if llm_result.fallback_used:
-        notes.append("AI 深度整理未完全成功，已保留本地安全底稿。")
+        notes.append("AI 深度整理存在未完成阶段；已标记未解析证据，可从 checkpoint 重试。")
     if llm_result.llm_context_strategy == "chunked" and not llm_result.fallback_used:
         notes.append("AI 深度整理已完成：系统已自动使用分块整理处理长材料。")
     return GenerationSummary(
@@ -294,7 +335,10 @@ def build_generation_summary(parsed_files, report, llm_result) -> GenerationSumm
         detected_question_types=len(report.question_types),
         mock_questions_count=len(report.mock_exam.questions),
         anki_cards_count=len(report.anki_cards),
-        llm_calls=1 if llm_result.llm_status == "success" else 0,
+        llm_calls=llm_result.llm_calls,
+        retry_count=llm_result.retry_count,
+        chapter_count=len(report.study_units) or len(report.chapters),
+        chunk_count=llm_result.chunk_count,
         fallback_used=llm_result.fallback_used,
         final_report_source=llm_result.report_source,
         notes=notes[:12],

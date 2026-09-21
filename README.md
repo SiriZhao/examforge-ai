@@ -10,7 +10,7 @@ ExamForge AI 是一个面向大学生期末考试的 AI 复习资料生成器。
 
 - 自动区分课程纲要、课件、教材、笔记、往年题、答案和错题的作用。
 - 多文件证据整合：课程范围限制边界，往年题影响题型与重点，答案影响评分点。
-- 长资料经过 OCR 清洗、智能分块、chunk insight、evidence pack 和分阶段合成，避免直接塞满上下文。
+- AI 深度整理走 LLM-first 分阶段流程：Document/Evidence → ChunkUnderstanding → CourseModel → StudyBlueprint → UnitDraft → 全局合成 → canonical Markdown；OCR、来源锚点、检查点和导出由 Python 基础设施负责。
 - 生成重点优先级地图、复习讲义、往年题分析、题型攻略、模拟卷、主动回忆题、Anki 和冲刺计划。
 - 可导出 Markdown、DOCX、PDF 与 Anki CSV。
 
@@ -28,7 +28,7 @@ ExamForge AI 是一个面向大学生期末考试的 AI 复习资料生成器。
 
 - API Key 默认只保存于当前浏览器 `localStorage`。
 - 不写入工作空间数据库、日志、GitHub 或错误响应。
-- 未配置模型时仍可生成本地安全底稿和资料诊断。
+- 配置模型时默认使用 **AI 深度整理**；未配置模型时才使用 **基础离线整理**。离线报告只是兼容性应急路径，不是 AI 内容的知识基础。
 - 公共网页使用时必须通过 HTTPS；部分服务商禁止浏览器跨域测试，界面会给出中文提示。
 
 ## 本地开发

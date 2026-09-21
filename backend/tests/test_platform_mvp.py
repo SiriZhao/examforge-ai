@@ -47,3 +47,42 @@ def test_report_modules_have_stable_ids_and_versions() -> None:
         update = client.put(f"/api/review-projects/reports/{report['report_id']}/modules/{modules[0]['id']}", headers=headers, json={"content": {"title": "考试概览"}, "change_summary": "local edit"})
         assert update.status_code == 200
         assert update.json()["version"] == 1
+
+
+def test_project_list_restores_files_and_keeps_workspace_isolation() -> None:
+    with TestClient(app) as client:
+        first = workspace_headers(client)
+        second = workspace_headers(client)
+        project = client.post("/api/review-projects/projects", headers=first, json={
+            "course_name": "UI regression", "target_score": "85", "focus": "definitions",
+        }).json()
+        upload = client.post(
+            f"/api/review-projects/projects/{project['id']}/upload", headers=first,
+            files={"files": ("notes.txt", b"Chapter 1. Review definitions and examples.", "text/plain")},
+        )
+        assert upload.status_code == 201
+        items = client.get("/api/review-projects/projects", headers=first).json()
+        assert len(items) == 1
+        assert items[0]["files"][0]["saved_filename"] == upload.json()["files"][0]["saved_filename"]
+        assert items[0]["files"][0]["original_filename"] == "notes.txt"
+        assert items[0]["created_at"].endswith("+00:00")
+        assert items[0]["target_score"] == "85"
+        assert items[0]["focus"] == "definitions"
+        assert client.get("/api/review-projects/projects", headers=second).json() == []
+
+
+def test_project_delete_is_confirmed_by_api_and_scoped_to_workspace() -> None:
+    with TestClient(app) as client:
+        owner = workspace_headers(client)
+        stranger = workspace_headers(client)
+        project = client.post("/api/review-projects/projects", headers=owner, json={"course_name": "Delete me"}).json()
+        upload = client.post(
+            f"/api/review-projects/projects/{project['id']}/upload", headers=owner,
+            files={"files": ("notes.txt", b"temporary study notes", "text/plain")},
+        )
+        assert upload.status_code == 201
+        assert client.delete(f"/api/review-projects/projects/{project['id']}", headers=stranger).status_code == 404
+        response = client.delete(f"/api/review-projects/projects/{project['id']}", headers=owner)
+        assert response.status_code == 204
+        assert client.get("/api/review-projects/projects", headers=owner).json() == []
+        assert client.delete(f"/api/review-projects/projects/{project['id']}", headers=owner).status_code == 404
