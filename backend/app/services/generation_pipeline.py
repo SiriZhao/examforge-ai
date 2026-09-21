@@ -1,0 +1,780 @@
+from __future__ import annotations
+
+import json
+import logging
+import re
+import time
+from collections import Counter
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Callable
+
+from app.schemas.review import LLMConfig, LLMErrorInfo, ParsedFile, ReviewReport, StudyUnit
+from app.schemas.course_model import ChunkUnderstanding, CourseModel, StudyBlueprint, UnitDraft, SourceRef
+from app.services.chunking import SemanticChunk, split_semantic_chunks
+from app.services.generation_diagnostics import diagnostic, diagnostic_context
+from app.services.generator import generate_markdown_review
+from app.services.llm_capabilities import capability_for, estimate_tokens
+from app.services.llm_providers import get_llm_provider
+from app.services.llm_providers.base import LLMProviderError
+from app.services.llm_service import LLMEnhancementResult
+from app.services.review_planner import sanitize_report
+from app.services.study_unit_prompt import estimate_study_unit_prompt_tokens
+
+
+logger = logging.getLogger(__name__)
+CheckpointCallback = Callable[[str, int, int, str, dict | None, str | None, str | None], None]
+ProgressCallback = Callable[[int, str], None]
+MAX_RECOVERY_ATTEMPTS = 3
+MAX_RECOVERY_SPLIT_DEPTH = 2
+
+
+@dataclass(frozen=True)
+class ChapterSource:
+    title: str
+    text: str
+    source_anchors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PipelineStats:
+    chapter_count: int = 0
+    chunk_count: int = 0
+    llm_calls: int = 0
+    retry_count: int = 0
+    completed_checkpoints: int = 0
+    resumed_checkpoints: int = 0
+    errors: list[LLMErrorInfo] = field(default_factory=list)
+
+
+def build_chapter_sources(parsed_files: list[ParsedFile]) -> list[ChapterSource]:
+    chapters: list[ChapterSource] = []
+    for parsed in parsed_files:
+        structure = parsed.document_structure
+        sections = structure.sections if structure else []
+        selected, uses_major_sections = _select_chapter_sections(sections)
+        if len(selected) > 1:
+            selected = sorted(selected, key=lambda item: (item.page_start, item.page_end))
+            for index, section in enumerate(selected):
+                page_end = (
+                    max(section.page_start, selected[index + 1].page_start - 1)
+                    if uses_major_sections and index + 1 < len(selected)
+                    else (len(parsed.pages) if uses_major_sections else section.page_end)
+                )
+                pages = [page for page in parsed.pages if section.page_start <= page.page_number <= page_end]
+                text = "\n\n".join(
+                    f"[{page.source_anchor or parsed.filename + ', p. ' + str(page.page_number)}]\n{page.text}"
+                    for page in pages
+                    if page.text.strip()
+                )
+                if text.strip():
+                    chapters.append(ChapterSource(section.title, text, [section.source_anchor]))
+        else:
+            pages = [page for page in parsed.pages if page.text.strip()]
+            if pages:
+                text = "\n\n".join(
+                    f"[{page.source_anchor or parsed.filename + ', p. ' + str(page.page_number)}]\n{page.text}"
+                    for page in pages
+                )
+                title = selected[0].title if selected else (structure.title if structure else parsed.filename)
+                chapters.append(ChapterSource(title, text, [pages[0].source_anchor or parsed.filename]))
+    return chapters
+
+
+def _select_chapter_sections(sections):
+    major_pattern = re.compile(r"(?:第\s*[一二三四五六七八九十百零〇0-9]+\s*章)|(?:chapter\s+\d+)", re.I)
+    major = [section for section in sections if major_pattern.search(section.title)]
+    if major:
+        occurrences = Counter(section.page_start for section in major)
+        without_toc_clusters = [section for section in major if occurrences[section.page_start] <= 2]
+        candidates = without_toc_clusters or major
+        selected = []
+        seen: set[str] = set()
+        for section in sorted(candidates, key=lambda item: (item.page_start, item.page_end)):
+            key = re.sub(r"\s+", "", section.title).casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            selected.append(section)
+        return selected, True
+    return [section for section in sections if not section.parent_id], False
+
+
+def split_chapter(chapter: ChapterSource, token_budget: int, model: str | None = None) -> list[SemanticChunk]:
+    # Character sizing is only an initial hint. Every result is verified with the
+    # conservative token estimator and recursively reduced when necessary.
+    max_chars = max(1_200, min(24_000, token_budget * 2))
+    pending = split_semantic_chunks(chapter.text, max_chars=max_chars, overlap_chars=min(800, max_chars // 12))
+    output: list[SemanticChunk] = []
+    while pending:
+        chunk = pending.pop(0)
+        if estimate_tokens(chunk.text, model) <= token_budget:
+            output.append(chunk)
+            continue
+        smaller = split_semantic_chunks(
+            chunk.text,
+            max_chars=max(600, len(chunk.text) // 2),
+            overlap_chars=0,
+        )
+        if len(smaller) <= 1:
+            midpoint = max(1, len(chunk.text) // 2)
+            smaller = [
+                SemanticChunk(f"{chunk.chunk_id}-a", chunk.text[:midpoint], chunk.section_title, chunk.source_anchors),
+                SemanticChunk(f"{chunk.chunk_id}-b", chunk.text[midpoint:], chunk.section_title, chunk.source_anchors),
+            ]
+        pending = smaller + pending
+    return output
+
+
+def _legacy_generate_hierarchical_report(
+    parsed_files: list[ParsedFile],
+    safe_draft: ReviewReport,
+    config: LLMConfig,
+    *,
+    job_id: str,
+    checkpoints: dict[str, dict] | None = None,
+    checkpoint_callback: CheckpointCallback | None = None,
+    progress_callback: ProgressCallback | None = None,
+) -> tuple[LLMEnhancementResult, PipelineStats]:
+    report = sanitize_report(safe_draft.model_copy(deep=True))
+    chapters = build_chapter_sources(parsed_files)
+    stats = PipelineStats(chapter_count=len(chapters))
+    provider = get_llm_provider(config.provider)
+    model = config.model or provider.default_model
+    capability = capability_for(config.provider, model)
+    prompt_overhead_tokens = max(
+        estimate_study_unit_prompt_tokens(chapter.title, "", concise=False, model=model)
+        for chapter in chapters
+    ) if chapters else estimate_study_unit_prompt_tokens("", "", concise=False, model=model)
+    token_budget = capability.available_input_tokens(schema_tokens=prompt_overhead_tokens)
+    chapter_chunks = [(chapter, split_chapter(chapter, token_budget, model)) for chapter in chapters]
+    stats.chunk_count = sum(len(chunks) for _, chunks in chapter_chunks)
+    if not config.enabled:
+        report.markdown = generate_markdown_review(report, prefer_existing=False)
+        return LLMEnhancementResult(report, "rule_based", "disabled", False, None, "disabled", chunk_count=stats.chunk_count), stats
+    diagnostic(
+        "pipeline_started",
+        job_id=job_id,
+        provider=provider.display_name,
+        model=model,
+        source_page_count=sum(len(item.pages) for item in parsed_files),
+        extracted_text_character_count=sum(len(item.raw_text) for item in parsed_files),
+        estimated_input_tokens=sum(estimate_tokens(item.raw_text, model) for item in parsed_files),
+        prompt_overhead_token_estimate=prompt_overhead_tokens,
+        available_input_tokens=token_budget,
+        configured_context_limit=capability.context_window,
+        configured_max_output=capability.max_output_tokens,
+        reserved_output_tokens=capability.reserved_output_tokens,
+        safety_margin=capability.safety_margin,
+        chapter_count=stats.chapter_count,
+        chunk_count=stats.chunk_count,
+    )
+
+    units: list[StudyUnit] = []
+    checkpoint_map = checkpoints or {}
+    current = 0
+    circuit_error: LLMErrorInfo | None = None
+    for chapter_index, (chapter, chunks) in enumerate(chapter_chunks, start=1):
+        for chunk_index, chunk in enumerate(chunks, start=1):
+            current += 1
+            key = f"chapter-{chapter_index}:chunk-{chunk_index}"
+            saved = checkpoint_map.get(key)
+            if saved and saved.get("status") == "completed" and saved.get("content"):
+                units.append(StudyUnit.model_validate(saved["content"]))
+                stats.resumed_checkpoints += 1
+                continue
+            if progress_callback:
+                progress_callback(72 + int((current / max(stats.chunk_count, 1)) * 20), f"正在生成第 {chapter_index}/{stats.chapter_count} 章，第 {chunk_index}/{len(chunks)} 块。")
+            if circuit_error is not None:
+                unit, error, calls, retries, resumed = local_study_unit(chapter.title, chunk.text), circuit_error, 0, 0, 0
+                if checkpoint_callback:
+                    checkpoint_callback(
+                        key,
+                        chapter_index,
+                        chunk_index,
+                        _checkpoint_failure_status(error),
+                        unit.model_dump(mode="json"),
+                        error.code,
+                        error.message,
+                    )
+            else:
+                unit, error, calls, retries, resumed = _generate_unit_with_recovery(
+                    provider,
+                    config,
+                    chapter,
+                    chunk,
+                    capability.max_output_tokens,
+                    job_id,
+                    chapter_index,
+                    str(chunk_index),
+                    checkpoint_key=key,
+                    checkpoint_map=checkpoint_map,
+                    checkpoint_callback=checkpoint_callback,
+                )
+                if error and error.code in {
+                    "PROVIDER_QUOTA_EXCEEDED",
+                    "PROVIDER_RATE_LIMIT",
+                    "AUTH_FAILED",
+                    "CONFIG_MISSING",
+                    "MODEL_NOT_FOUND",
+                }:
+                    circuit_error = error
+            stats.llm_calls += calls
+            stats.retry_count += retries
+            stats.resumed_checkpoints += resumed
+            if error:
+                stats.errors.append(error)
+            units.append(unit)
+            if not error:
+                stats.completed_checkpoints += 1
+
+    if units:
+        report.study_units = merge_units(units)
+        _apply_units_to_report(report)
+    report.markdown = generate_markdown_review(report, prefer_existing=False)
+    first_error = stats.errors[0] if stats.errors else None
+    result = LLMEnhancementResult(
+        report=report,
+        report_source="llm_enhanced" if not first_error else "local_safe_draft_with_ai_outline",
+        llm_status="success" if not first_error else "failed",
+        fallback_used=bool(first_error),
+        llm_error=first_error,
+        llm_context_strategy="chunked",
+        llm_calls=stats.llm_calls,
+        retry_count=stats.retry_count,
+        chunk_count=stats.chunk_count,
+    )
+    diagnostic(
+        "pipeline_completed",
+        job_id=job_id,
+        llm_calls=stats.llm_calls,
+        retry_count=stats.retry_count,
+        completed_checkpoints=stats.completed_checkpoints,
+        resumed_checkpoints=stats.resumed_checkpoints,
+        error_code=first_error.code if first_error else None,
+        persistence_status="checkpointed",
+    )
+    return result, stats
+
+
+def _generate_unit_with_recovery(
+    provider,
+    config,
+    chapter,
+    chunk,
+    max_output_tokens,
+    job_id,
+    chapter_index,
+    chunk_index,
+    *,
+    checkpoint_key: str,
+    checkpoint_map: dict[str, dict],
+    checkpoint_callback: CheckpointCallback | None,
+    split_depth: int = 0,
+):
+    saved = checkpoint_map.get(checkpoint_key)
+    if saved and saved.get("status") == "completed" and saved.get("content"):
+        return StudyUnit.model_validate(saved["content"]), None, 0, 0, 1
+    if checkpoint_callback:
+        checkpoint_callback(checkpoint_key, chapter_index, _chunk_number(chunk_index), "running", None, None, None)
+
+    calls = 0
+    retries = 0
+    last_error: LLMErrorInfo | None = None
+    for attempt in range(1, MAX_RECOVERY_ATTEMPTS + 1):
+        calls += 1
+        started = time.perf_counter()
+        request_started = datetime.now().isoformat(timespec="milliseconds")
+        diagnostic(
+            "llm_request_started",
+            job_id=job_id,
+            provider=provider.display_name,
+            model=config.model or provider.default_model,
+            current_chapter=chapter_index,
+            current_chunk=chunk_index,
+            retry_number=attempt - 1,
+            prompt_token_estimate=estimate_study_unit_prompt_tokens(
+                chapter.title,
+                chunk.text,
+                concise=attempt > 1,
+                model=config.model or provider.default_model,
+            ),
+            request_start=request_started,
+        )
+        try:
+            with diagnostic_context(
+                job_id=job_id,
+                current_chapter=chapter_index,
+                current_chunk=chunk_index,
+                retry_number=attempt - 1,
+            ):
+                generate = getattr(provider, "generate_study_unit")
+                unit = generate(
+                    chapter.title,
+                    chunk.text,
+                    config,
+                    max_output_tokens=min(max_output_tokens, 2800 if attempt == 1 else 3600),
+                    concise=attempt > 1,
+                )
+            diagnostic(
+                "llm_request_completed",
+                job_id=job_id,
+                current_chapter=chapter_index,
+                current_chunk=chunk_index,
+                retry_number=attempt - 1,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                request_end=datetime.now().isoformat(timespec="milliseconds"),
+                http_status=200,
+                parse_status="success",
+                returned_character_count=len(json.dumps(unit.model_dump(mode="json"), ensure_ascii=False)),
+            )
+            if checkpoint_callback:
+                checkpoint_callback(
+                    checkpoint_key,
+                    chapter_index,
+                    _chunk_number(chunk_index),
+                    "completed",
+                    unit.model_dump(mode="json"),
+                    None,
+                    None,
+                )
+            return unit, None, calls, retries, 0
+        except LLMProviderError as exc:
+            last_error = _canonical_error(exc.error)
+            diagnostic(
+                "llm_request_failed",
+                job_id=job_id,
+                current_chapter=chapter_index,
+                current_chunk=chunk_index,
+                retry_number=attempt - 1,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                request_end=datetime.now().isoformat(timespec="milliseconds"),
+                http_status=exc.http_status,
+                exception_type=type(exc).__name__,
+                exception_message=str(exc)[:200],
+                error_code=last_error.code,
+                parse_status="failed" if last_error.code == "LLM_RESPONSE_PARSE_ERROR" else "not_applicable",
+            )
+            if (
+                last_error.code in {"LLM_OUTPUT_TRUNCATED", "LLM_CONTEXT_EXCEEDED"}
+                and attempt >= 2
+                and split_depth < MAX_RECOVERY_SPLIT_DEPTH
+            ):
+                pieces = _split_recovery_chunk(chunk)
+                if len(pieces) > 1:
+                    diagnostic(
+                        "llm_recovery_split",
+                        job_id=job_id,
+                        current_chapter=chapter_index,
+                        current_chunk=chunk_index,
+                        retry_number=attempt,
+                        split_depth=split_depth + 1,
+                        child_chunk_count=len(pieces),
+                        original_token_estimate=estimate_tokens(chunk.text, config.model or provider.default_model),
+                    )
+                    child_units: list[StudyUnit] = []
+                    child_error: LLMErrorInfo | None = None
+                    resumed = 0
+                    retries += 1
+                    for child_index, piece in enumerate(pieces, start=1):
+                        child_key = f"{checkpoint_key}.{child_index}"
+                        child_unit, error, child_calls, child_retries, child_resumed = _generate_unit_with_recovery(
+                            provider,
+                            config,
+                            chapter,
+                            piece,
+                            max_output_tokens,
+                            job_id,
+                            chapter_index,
+                            f"{chunk_index}.{child_index}",
+                            checkpoint_key=child_key,
+                            checkpoint_map=checkpoint_map,
+                            checkpoint_callback=checkpoint_callback,
+                            split_depth=split_depth + 1,
+                        )
+                        calls += child_calls
+                        retries += child_retries
+                        resumed += child_resumed
+                        child_units.append(child_unit)
+                        child_error = child_error or error
+                    combined = _combine_recovery_units(chapter.title, child_units)
+                    if checkpoint_callback:
+                        checkpoint_callback(
+                            checkpoint_key,
+                            chapter_index,
+                            _chunk_number(chunk_index),
+                            "completed" if child_error is None else _checkpoint_failure_status(child_error),
+                            combined.model_dump(mode="json"),
+                            child_error.code if child_error else None,
+                            child_error.message if child_error else None,
+                        )
+                    return combined, child_error, calls, retries, resumed
+            if last_error.code not in {
+                "LLM_OUTPUT_TRUNCATED",
+                "LLM_CONTEXT_EXCEEDED",
+                "LLM_TIMEOUT",
+                "LLM_RESPONSE_PARSE_ERROR",
+                "PROVIDER_RATE_LIMIT",
+                "LLM_PROVIDER_ERROR",
+            }:
+                break
+        except Exception as exc:
+            last_error = LLMErrorInfo(
+                code="LLM_PROVIDER_ERROR",
+                message="模型服务返回了无法处理的响应。",
+                suggestion="请稍后重试；已完成章节会从 checkpoint 继续。",
+                provider=provider.display_name,
+                model=config.model or provider.default_model,
+                can_retry=True,
+                fallback_used=True,
+            )
+            diagnostic(
+                "llm_request_failed",
+                job_id=job_id,
+                current_chapter=chapter_index,
+                current_chunk=chunk_index,
+                retry_number=attempt - 1,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                request_end=datetime.now().isoformat(timespec="milliseconds"),
+                exception_type=type(exc).__name__,
+                exception_message=str(exc)[:200],
+                error_code=last_error.code,
+            )
+        if attempt < MAX_RECOVERY_ATTEMPTS:
+            retries += 1
+            continue
+        break
+    fallback = local_study_unit(chapter.title, chunk.text)
+    if checkpoint_callback:
+        checkpoint_callback(
+            checkpoint_key,
+            chapter_index,
+            _chunk_number(chunk_index),
+            _checkpoint_failure_status(last_error),
+            fallback.model_dump(mode="json"),
+            last_error.code if last_error else "LLM_PROVIDER_ERROR",
+            last_error.message if last_error else "Unknown provider failure.",
+        )
+    return fallback, last_error, calls, retries, 0
+
+
+def _split_recovery_chunk(chunk: SemanticChunk) -> list[SemanticChunk]:
+    text = chunk.text.strip()
+    if len(text) < 2:
+        return [chunk]
+    midpoint = len(text) // 2
+    boundaries = [match.end() for match in re.finditer(r"\n\s*\n|\n(?=#{1,6}\s|第\s*[\d一二三四五六七八九十百]+[章节])", text)]
+    useful = [position for position in boundaries if len(text) // 4 <= position <= len(text) * 3 // 4]
+    split_at = min(useful, key=lambda position: abs(position - midpoint)) if useful else midpoint
+    left, right = text[:split_at].strip(), text[split_at:].strip()
+    if not left or not right:
+        return [chunk]
+    return [
+        SemanticChunk(f"{chunk.chunk_id}.1", left, chunk.section_title, chunk.source_anchors),
+        SemanticChunk(f"{chunk.chunk_id}.2", right, chunk.section_title, chunk.source_anchors),
+    ]
+
+
+def _combine_recovery_units(chapter_title: str, units: list[StudyUnit]) -> StudyUnit:
+    if not units:
+        return local_study_unit(chapter_title, "")
+    combined = units[0].model_copy(deep=True)
+    combined.name = chapter_title or combined.name
+    combined.priority = max(unit.priority for unit in units)
+    combined.reason = next((unit.reason for unit in units if unit.reason), combined.reason)
+    for field_name in ("must_know", "key_points", "formulas_or_methods", "common_exam_angles", "pitfalls"):
+        values = list(dict.fromkeys(value for unit in units for value in getattr(unit, field_name)))
+        setattr(combined, field_name, values)
+    combined.how_to_review = next((unit.how_to_review for unit in units if unit.how_to_review), combined.how_to_review)
+    return combined
+
+
+def _checkpoint_failure_status(error: LLMErrorInfo | None) -> str:
+    return "retryable_failed" if error and error.can_retry else "failed"
+
+
+def _chunk_number(chunk_index: str | int) -> int:
+    try:
+        return int(str(chunk_index).split(".", 1)[0])
+    except ValueError:
+        return 0
+
+
+def _canonical_error(error: LLMErrorInfo) -> LLMErrorInfo:
+    mapping = {
+        "TIMEOUT": "LLM_TIMEOUT",
+        "NETWORK_ERROR": "LLM_PROVIDER_ERROR",
+        "CONTEXT_TOO_LONG": "LLM_CONTEXT_EXCEEDED",
+        "RESPONSE_PARSE_ERROR": "LLM_RESPONSE_PARSE_ERROR",
+        "RATE_LIMITED": "PROVIDER_RATE_LIMIT",
+        "UNKNOWN_ERROR": "LLM_PROVIDER_ERROR",
+    }
+    return error.model_copy(update={"code": mapping.get(error.code, error.code)})
+
+
+def local_study_unit(title: str, text: str) -> StudyUnit:
+    lines = [line.strip() for line in text.splitlines() if 8 <= len(line.strip()) <= 180 and not line.startswith("[")]
+    key_points = list(dict.fromkeys(lines))[:8]
+    return StudyUnit(
+        name=title or "未命名专题",
+        reason="模型调用未完成，已从本地章节证据保留可恢复底稿。",
+        priority=70,
+        must_know=key_points[:4],
+        key_points=key_points,
+        formulas_or_methods=[line for line in key_points if any(symbol in line for symbol in "=∑∫√")][:5],
+        how_to_review="先核对本章原始材料，再重试 AI 生成；已完成章节无需重做。",
+    )
+
+
+def merge_units(units: list[StudyUnit]) -> list[StudyUnit]:
+    merged: dict[str, StudyUnit] = {}
+    for unit in units:
+        key = unit.name.strip().casefold() or f"unit-{len(merged) + 1}"
+        if key not in merged:
+            merged[key] = unit.model_copy(deep=True)
+            continue
+        target = merged[key]
+        for field_name in ("must_know", "key_points", "formulas_or_methods", "common_exam_angles", "pitfalls"):
+            values = list(dict.fromkeys([*getattr(target, field_name), *getattr(unit, field_name)]))
+            setattr(target, field_name, values)
+        target.priority = max(target.priority, unit.priority)
+    return list(merged.values())
+
+
+# LLM-first v4 path.  Kept at the end so older compatibility helpers above remain
+# importable, while the active symbol no longer routes through StudyUnit generation.
+def generate_hierarchical_report(
+    parsed_files: list[ParsedFile],
+    safe_draft: ReviewReport | None,
+    config: LLMConfig,
+    *,
+    job_id: str,
+    checkpoints: dict[str, dict] | None = None,
+    checkpoint_callback: CheckpointCallback | None = None,
+    progress_callback: ProgressCallback | None = None,
+    study_goal: str = "balanced",
+    exam_type: str = "unknown",
+    detail_level: str = "detailed",
+    output_style: str = "teaching_assistant",
+    title: str = "",
+) -> tuple[LLMEnhancementResult, PipelineStats]:
+    """Generate canonical study material from evidence, never from a safe draft.
+
+    ``safe_draft`` is accepted only for source compatibility with older callers;
+    it is intentionally ignored whenever a usable provider is configured.
+    """
+    chapters = build_chapter_sources(parsed_files)
+    stats = PipelineStats(chapter_count=len(chapters))
+    # Compatibility callers from v3.2 pass a prebuilt safe draft and do not
+    # provide v4 intent/title fields. The production router never takes this
+    # branch; it passes ``safe_draft=None`` for normal AI mode.
+    if safe_draft is not None and title == "" and study_goal == "balanced" and exam_type == "unknown" and detail_level == "detailed" and output_style == "teaching_assistant":
+        return _legacy_generate_hierarchical_report(
+            parsed_files, safe_draft, config, job_id=job_id,
+            checkpoints=checkpoints, checkpoint_callback=checkpoint_callback,
+            progress_callback=progress_callback,
+        )
+    if not config.enabled:
+        fallback = safe_draft or generate_review_report(
+            "\n\n".join(ch.text for ch in chapters), title=title or "复习资料",
+            study_goal=study_goal, exam_type=exam_type,
+        )
+        return LLMEnhancementResult(fallback, "rule_based", "disabled", False, None, "disabled"), stats
+
+    provider = get_llm_provider(config.provider)
+    model = config.model or provider.default_model
+    capability = capability_for(config.provider, model)
+    chunks = [chunk for chapter in chapters for chunk in split_chapter(chapter, max(900, capability.available_input_tokens(schema_tokens=700)), model)]
+    stats.chunk_count = len(chunks)
+    intent = {"study_goal": study_goal, "exam_type": exam_type, "detail_level": detail_level, "output_style": output_style}
+    understanding: list[dict] = []
+    errors: list[LLMErrorInfo] = []
+    for index, chunk in enumerate(chunks, 1):
+        prompt = _v4_prompt("chunk_understanding", {
+            "chunk_id": chunk.chunk_id, "source_refs": chunk.source_anchors,
+            "text": chunk.text, "intent": intent,
+        })
+        try:
+            data = _call_stage(provider, "chunk_understanding", prompt, config, min(capability.max_output_tokens, 4200), model)
+            parsed = _coerce_stage_json(data)
+            if isinstance(parsed.get("chunk_understanding"), dict):
+                parsed = parsed["chunk_understanding"]
+            parsed.setdefault("chunk_id", chunk.chunk_id)
+            parsed.setdefault("source_refs", [{"anchor": ref} for ref in chunk.source_anchors])
+            parsed["source_refs"] = [
+                {"anchor": ref} if isinstance(ref, str) else ref
+                for ref in parsed.get("source_refs", [])
+            ]
+            understanding.append(ChunkUnderstanding.model_validate(parsed).model_dump(mode="json"))
+            stats.llm_calls += 1
+            if checkpoint_callback:
+                checkpoint_callback(
+                    f"chunk:{chunk.chunk_id}", 0, index, "completed",
+                    understanding[-1], None, None,
+                )
+        except Exception as exc:
+            error = _stage_error(provider, config, model, exc)
+            errors.append(error)
+            understanding.append(ChunkUnderstanding(chunk_id=chunk.chunk_id, source_refs=[SourceRef(anchor=r) for r in chunk.source_anchors], unresolved_points=["LLM chunk understanding failed"]).model_dump(mode="json"))
+            if checkpoint_callback:
+                checkpoint_callback(f"chunk:{chunk.chunk_id}", 0, index, "FAILED", understanding[-1], error.code, error.message)
+    if not understanding or all(item.get("unresolved_points") and not item.get("semantic_summary") for item in understanding):
+        raise LLMProviderError(errors[0] if errors else LLMErrorInfo(code="LLM_PROVIDER_ERROR", message="No chunk understanding", provider=provider.display_name, model=model, fallback_used=True))
+
+    course_prompt = _v4_prompt("course_model", {"title": title, "intent": intent, "chunks": understanding, "document_structure": [p.document_structure.model_dump(mode="json") if p.document_structure else {} for p in parsed_files]})
+    course_data = _coerce_stage_json(_call_stage(provider, "course_model", course_prompt, config, min(capability.max_output_tokens, 7000), model))
+    stats.llm_calls += 1
+    course = CourseModel.model_validate(course_data)
+    blueprint_prompt = _v4_prompt("study_blueprint", {"course_model": course.model_dump(mode="json"), "intent": intent, "source_metadata": [p.filename for p in parsed_files]})
+    blueprint = StudyBlueprint.model_validate(_coerce_stage_json(_call_stage(provider, "study_blueprint", blueprint_prompt, config, min(capability.max_output_tokens, 5000), model)))
+    stats.llm_calls += 1
+    optional_artifacts: dict = {}
+    requested_artifacts = _requested_artifacts(study_goal, exam_type)
+    if requested_artifacts:
+        artifact_prompt = _v4_prompt("optional_artifacts", {
+            "requested": requested_artifacts,
+            "course_model": course.model_dump(mode="json"),
+            "blueprint": blueprint.model_dump(mode="json"),
+            "evidence": understanding,
+            "intent": intent,
+            "instruction": "Generate only requested artifacts. Label past-exam observations OBSERVED, model interpretations INFERRED, and new practice GENERATED.",
+        })
+        optional_artifacts = _coerce_stage_json(_call_stage(provider, "optional_artifacts", artifact_prompt, config, min(capability.max_output_tokens, 7000), model))
+        stats.llm_calls += 1
+
+    drafts: list[UnitDraft] = []
+    for unit_index, plan in enumerate(blueprint.units, 1):
+        relevant = _relevant_evidence(plan, understanding)
+        unit_prompt = _v4_prompt("unit_draft", {"unit": plan, "course_model": course.model_dump(mode="json"), "evidence": relevant, "neighbor_summaries": [d.markdown[-1200:] for d in drafts[-2:]], "intent": intent})
+        try:
+            raw = _call_stage(provider, "unit_draft", unit_prompt, config, capability.max_output_tokens, model)
+            data = _coerce_stage_json(raw)
+            if isinstance(data, dict) and "markdown" not in data and isinstance(raw, str):
+                data = {"markdown": raw}
+            drafts.append(UnitDraft.model_validate({"unit_id": data.get("unit_id", f"unit-{unit_index}"), "title": data.get("title", plan.get("title", f"Unit {unit_index}")), "markdown": data.get("markdown", ""), "source_refs": data.get("source_refs", []), "metadata": data.get("metadata", {}), "status": "READY" if data.get("markdown") else "FAILED"}))
+            stats.llm_calls += 1
+        except Exception as exc:
+            errors.append(_stage_error(provider, config, model, exc))
+            drafts.append(UnitDraft(unit_id=f"unit-{unit_index}", title=plan.get("title", f"Unit {unit_index}"), markdown="", status="FAILED"))
+
+    synthesis_prompt = _v4_prompt("course_synthesis", {"title": title, "intent": intent, "course_model": course.model_dump(mode="json"), "blueprint": blueprint.model_dump(mode="json"), "unit_drafts": [d.model_dump(mode="json") for d in drafts], "optional_artifacts": optional_artifacts})
+    synthesis = _call_stage(provider, "course_synthesis", synthesis_prompt, config, capability.max_output_tokens, model)
+    stats.llm_calls += 1
+    synthesis_data = _coerce_stage_json(synthesis)
+    canonical = synthesis_data.get("canonical_markdown") if isinstance(synthesis_data, dict) else None
+    canonical = canonical or (synthesis if isinstance(synthesis, str) else "")
+    if not canonical.strip():
+        raise LLMProviderError(LLMErrorInfo(code="INVALID_CANONICAL", message="LLM returned empty canonical material", provider=provider.display_name, model=model, fallback_used=True))
+    report = ReviewReport(title=title or course.course_title or "复习资料", summary=course_data.get("summary", ""), markdown=canonical, study_goal=study_goal, exam_type=exam_type, detail_level=detail_level, output_style=output_style)
+    report.overview = {
+        "course_model": course.model_dump(mode="json"),
+        "blueprint": blueprint.model_dump(mode="json"),
+        "chunk_understanding": understanding,
+        "source_coverage": {
+            "chunks_total": len(chunks),
+            "chunks_understood": sum(1 for item in understanding if item.get("semantic_summary")),
+            "unresolved_chunks": [item.get("chunk_id") for item in understanding if item.get("unresolved_points")],
+        },
+        "unit_statuses": [d.status for d in drafts],
+        "optional_artifacts": optional_artifacts,
+    }
+    report.insufficient_materials = [d.title for d in drafts if d.status != "READY"]
+    first_error = errors[0] if errors else None
+    return LLMEnhancementResult(report, "llm_enhanced", "partial" if first_error else "success", bool(first_error), first_error, "hierarchical", llm_calls=stats.llm_calls, chunk_count=stats.chunk_count), stats
+
+
+def _v4_prompt(stage: str, payload: dict) -> str:
+    return json.dumps({"stage": stage, "system_intent": "You are an expert university tutor, curriculum analyst, and exam-preparation editor. Transform supplied evidence into useful grounded study material. Freely reorganize, but do not invent course-specific facts; distinguish observed, inferred, and generated content.", "payload": payload}, ensure_ascii=False)
+
+
+def _call_stage(provider, stage: str, prompt: str, config: LLMConfig, max_output_tokens: int, model: str):
+    generate = getattr(provider, "generate_stage", None)
+    if generate is None:
+        raise RuntimeError(f"Provider does not implement LLM-native stage: {stage}")
+    return generate(stage, prompt, config, max_output_tokens=max(512, int(max_output_tokens)))
+
+
+def _coerce_stage_json(value):
+    if isinstance(value, dict):
+        return value
+    text = str(value or "").strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, re.S | re.I)
+        candidate = fenced.group(1) if fenced else None
+        if candidate is None:
+            start, end = text.find("{"), text.rfind("}")
+            candidate = text[start:end + 1] if start >= 0 and end > start else None
+        if candidate:
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                pass
+        return {"canonical_markdown": text, "markdown": text}
+
+
+def _relevant_evidence(plan: dict, understanding: list[dict]) -> list[dict]:
+    terms = " ".join(str(v) for v in plan.values()).lower()
+    ranked = sorted(understanding, key=lambda item: sum(1 for t in item.get("major_topics", []) if str(t).lower() in terms), reverse=True)
+    return ranked[: max(2, min(8, len(ranked)))]
+
+
+def _requested_artifacts(study_goal: str, exam_type: str) -> list[str]:
+    requested: list[str] = []
+    if study_goal in {"memorization", "anki_focused"}:
+        requested.append("active_recall_cards")
+    if study_goal in {"practice_heavy", "past_exam_focused"}:
+        requested.append("practice_questions")
+    if study_goal == "past_exam_focused" or exam_type in {"closed_book", "programming", "lab_exam"}:
+        requested.append("mock_exam")
+    if exam_type == "programming":
+        requested.append("code_tracing_and_debugging")
+    if exam_type == "lab_exam":
+        requested.append("procedure_observation_error_analysis")
+    return list(dict.fromkeys(requested))
+
+
+def _stage_error(provider, config, model, exc) -> LLMErrorInfo:
+    return LLMErrorInfo(code="LLM_STAGE_FAILED", message=f"LLM stage failed: {type(exc).__name__}", suggestion="Retry this stage from its checkpoint.", provider=provider.display_name, model=model, can_retry=True, fallback_used=False)
+
+
+def repair_unit_draft(
+    provider,
+    draft: UnitDraft,
+    defect: str,
+    evidence: list[dict],
+    config: LLMConfig,
+    *,
+    max_output_tokens: int = 6000,
+) -> UnitDraft:
+    """Repair one defective unit without regenerating the course."""
+    prompt = _v4_prompt("unit_repair", {
+        "unit": draft.model_dump(mode="json"),
+        "defect": defect,
+        "evidence": evidence,
+        "instruction": "Return only the repaired unit JSON. Preserve valid content and change only the defective portion.",
+    })
+    raw = _call_stage(provider, "unit_repair", prompt, config, max_output_tokens, config.model or provider.default_model)
+    data = _coerce_stage_json(raw)
+    return UnitDraft.model_validate({
+        "unit_id": data.get("unit_id", draft.unit_id),
+        "title": data.get("title", draft.title),
+        "markdown": data.get("markdown", draft.markdown),
+        "source_refs": data.get("source_refs", [item for item in draft.source_refs]),
+        "metadata": {**draft.metadata, **data.get("metadata", {})},
+        "status": "READY",
+    })
+
+
+def _apply_units_to_report(report: ReviewReport) -> None:
+    for index, unit in enumerate(report.study_units):
+        if index < len(report.chapters):
+            report.chapters[index].chapter = unit.name
+            report.chapters[index].keywords = unit.key_points[:12] or report.chapters[index].keywords
+            report.chapters[index].formulas = unit.formulas_or_methods[:12] or report.chapters[index].formulas
+            report.chapters[index].review_advice = unit.how_to_review or report.chapters[index].review_advice
+        if index < len(report.review_order):
+            report.review_order[index].chapter = unit.name
+            report.review_order[index].importance = unit.priority
+            report.review_order[index].reason = unit.reason or report.review_order[index].reason

@@ -1,0 +1,9 @@
+:root {
+  --primary: #245c49; --primary-hover: #194632; --tint: #eef4ef;
+  --background: #f8f9f6; --surface: #fff; --sidebar: #f1f3ed;
+  --text: #232d29; --muted: #69736d; --line: #e4e8e1; --danger: #a3342f;
+  --radius: 12px; --radius-control: 8px; --space-1: 4px; --space-2: 8px;
+  --space-3: 12px; --space-4: 16px; --space-6: 24px; --space-8: 32px;
+  --sidebar-width: 224px; --header-height: 72px; --motion-fast: 180ms; --motion-progress: 220ms;
+  font-family: 'DM Sans', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
