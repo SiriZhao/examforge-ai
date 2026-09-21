@@ -11,7 +11,7 @@ AppMode = Literal["local_dev", "desktop", "cloud"]
 
 
 class Settings(BaseSettings):
-    app_name: str = "ExamForge AI"
+    app_name: str = "RecallForge AI"
     app_version: str = APP_VERSION
     app_mode: AppMode = Field(default="local_dev", validation_alias=AliasChoices("APP_MODE", "ERA_APP_MODE"))
     public_base_url: str = Field(default="", validation_alias=AliasChoices("PUBLIC_BASE_URL", "ERA_PUBLIC_BASE_URL"))

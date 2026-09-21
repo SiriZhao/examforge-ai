@@ -1,4 +1,4 @@
-app = "examforge-ai"
+app = "recallforge-ai"
 primary_region = "nrt"
 
 [build]
@@ -6,7 +6,7 @@ primary_region = "nrt"
 
 [env]
   APP_MODE = "cloud"
-  APP_NAME = "ExamForge AI"
+  APP_NAME = "RecallForge AI"
   APP_VERSION = "0.6.0"
   PORT = "8000"
   MAX_UPLOAD_MB = "50"

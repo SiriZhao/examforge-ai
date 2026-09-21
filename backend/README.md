@@ -1,4 +1,4 @@
-# ExamForge AI 后端
+# RecallForge AI 后端
 
 FastAPI 后端提供匿名工作空间、项目级上传、文档解析、OCR、长文档分块、复习资料生成和导出。
 

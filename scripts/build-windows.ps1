@@ -51,12 +51,12 @@ function Stop-RunningExamForge {
     $processes = $processes | Where-Object { $_ }
     if (-not $processes) { return }
 
-    Write-Host "ExamForge AI related processes are running. Attempting to stop them before rebuilding..." -ForegroundColor Yellow
+        Write-Host "RecallForge AI related processes are running. Attempting to stop them before rebuilding..." -ForegroundColor Yellow
     foreach ($process in $processes) {
         try {
             Stop-Process -Id $process.Id -Force -ErrorAction Stop
         } catch {
-            throw "A running ExamForge AI process could not be stopped. Please close ExamForge AI and rerun scripts\build-windows.ps1."
+            throw "A running RecallForge AI process could not be stopped. Please close RecallForge AI and rerun scripts\build-windows.ps1."
         }
     }
     Start-Sleep -Seconds 1

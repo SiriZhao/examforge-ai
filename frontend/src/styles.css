@@ -6,7 +6,7 @@
   text-rendering: optimizeLegibility;
 }
 
-/* Campus AI Workspace shell */
+/* RecallForge AI workspace shell */
 :root { --campus-ink:#17201d; --campus-muted:#68736f; --campus-line:#dfe5e1; --campus-green:#176b4f; --campus-soft:#f4f7f5; }
 * { box-sizing:border-box; }
 body { margin:0; color:var(--campus-ink); background:#f8faf9; }

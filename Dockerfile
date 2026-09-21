@@ -5,7 +5,7 @@ COPY frontend/package*.json ./
 RUN npm install
 COPY frontend ./
 ENV VITE_API_BASE_URL=
-ENV VITE_APP_NAME="ExamForge AI"
+ENV VITE_APP_NAME="RecallForge AI"
 ENV VITE_APP_VERSION=0.6.0
 RUN npm run build
 
@@ -14,7 +14,7 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV APP_MODE=cloud
-ENV APP_NAME="ExamForge AI"
+ENV APP_NAME="RecallForge AI"
 ENV APP_VERSION=0.6.0
 ENV PORT=8000
 ENV STORAGE_DIR=/data

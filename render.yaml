@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: examforge-ai
+    name: recallforge-ai
     env: docker
     plan: starter
     dockerfilePath: ./Dockerfile
@@ -13,7 +13,7 @@ services:
       - key: APP_MODE
         value: cloud
       - key: APP_NAME
-        value: ExamForge AI
+        value: RecallForge AI
       - key: APP_VERSION
         value: 0.6.0
       - key: DATABASE_URL

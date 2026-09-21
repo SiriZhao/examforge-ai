@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
 setlocal
-title ExamForge AI
+title RecallForge AI
 cd /d "%~dp0"
 
 echo.
-echo Starting ExamForge AI...
+echo Starting RecallForge AI...
 echo.
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\start-dev.ps1"

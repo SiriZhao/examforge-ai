@@ -1,6 +1,6 @@
 # 开发说明
 
-ExamForge AI 使用 React/Vite 前端与 FastAPI 后端。开发模式下，前端通过 `VITE_API_BASE_URL` 指向后端；未设置该变量时使用同源 `/api`。
+RecallForge AI 使用 React/Vite 前端与 FastAPI 后端。开发模式下，前端通过 `VITE_API_BASE_URL` 指向后端；未设置该变量时使用同源 `/api`。
 
 ```powershell
 cd frontend
