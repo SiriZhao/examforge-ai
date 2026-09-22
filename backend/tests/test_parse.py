@@ -153,7 +153,26 @@ def test_pdf_short_text_page_uses_ocr_fallback(tmp_path: Path, monkeypatch) -> N
 
 
 def test_windows_subprocess_kwargs_hide_console(monkeypatch) -> None:
+    class FakeStartupInfo:
+        def __init__(self) -> None:
+            self.dwFlags = 0
+
     monkeypatch.setattr("app.services.subprocess_utils.sys.platform", "win32")
+    monkeypatch.setattr(
+        "app.services.subprocess_utils.subprocess.STARTUPINFO",
+        FakeStartupInfo,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.subprocess_utils.subprocess.STARTF_USESHOWWINDOW",
+        1,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "app.services.subprocess_utils.subprocess.CREATE_NO_WINDOW",
+        134217728,
+        raising=False,
+    )
 
     kwargs = subprocess_no_window_kwargs()
 
