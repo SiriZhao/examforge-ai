@@ -38,6 +38,7 @@ dist/
 build/
 frontend/dist/
 backend/dist/
+tmp-readme-capture/
 *.exe
 *.msi
 *.zip

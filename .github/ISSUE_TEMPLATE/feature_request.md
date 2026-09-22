@@ -6,10 +6,14 @@ labels: enhancement
 assignees: ""
 ---
 
-## Problem
+## Problem or user need
 
 ## Proposed solution
 
-## Alternatives
+## Alternatives considered
+
+## Workflow or use case
+
+Who would use this, and how would it fit into a course-review workflow?
 
 ## Additional context

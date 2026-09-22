@@ -12,8 +12,16 @@ assignees: ""
 
 ## Expected behavior
 
-## Environment
+## Version and environment
 
-## Logs
+- RecallForge AI version or commit:
+- Installation method (Windows installer, local development, Docker):
+- OS:
+- Browser and version (if relevant):
+- Python/Node version (if relevant):
 
-Do not paste API keys or private course materials.
+## Logs and screenshots
+
+Paste sanitized logs or screenshots here.
+
+Do not paste API keys, tokens, database files, or private course materials.

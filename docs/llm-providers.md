@@ -1,39 +1,34 @@
-# LLM Providers
+# LLM providers
 
-CampusForge works without an LLM by generating a local safe draft. Optional LLM enhancement can improve topic naming, question type inference, mock exams, Anki cards, and sprint plans.
+LLM-first mode is the main semantic generation path. The model interprets course evidence, builds the Course Model and Study Blueprint, writes unit drafts, and synthesizes the canonical study report. Parsing, OCR coordination, source anchors, validation, persistence, retries, and exports remain local backend responsibilities.
 
-## Supported Configuration
+## Provider paths
 
-The current provider path is OpenAI-compatible chat completions, including DeepSeek-compatible endpoints.
+The current UI exposes:
 
-Common fields:
+- DeepSeek, with its OpenAI-compatible endpoint defaults.
+- OpenAI.
+- OpenAI-compatible, for a compatible Base URL and model.
 
-- `provider`
-- `base_url`
-- `model`
-- `api_key`
+The backend registry also contains Qwen, custom OpenAI-compatible, and mock adapters. A provider should be considered supported for your deployment only after checking its endpoint, model permissions, context limits, CORS behavior, and data policy.
 
-Server-side defaults can be configured with environment variables such as `DEFAULT_LLM_PROVIDER`, `DEFAULT_LLM_MODEL`, `DEFAULT_LLM_BASE_URL`, `DEEPSEEK_API_KEY`, and `OPENAI_API_KEY`.
+## Configuration fields
 
-User-provided keys should be used for the current request and should not be persisted by the server.
+- provider
+- base_url
+- model
+- api_key
 
-## Output Handling
+The model name is user-configured. The repository does not promise that every model at a compatible endpoint has the same context window or output behavior.
 
-LLM output is treated as untrusted and may be:
+## Key handling
 
-- JSON
-- JSON inside a Markdown code fence
-- JSON with explanatory text around it
-- full Markdown
+The browser saves BYOK configuration in localStorage when the user chooses Save. Generation requests carry the key to the backend; the backend uses it for the selected provider and does not persist it in the workspace database or logs. Never put real keys in .env.example, documentation, screenshots, tests, issues, or commits.
 
-The backend parses these formats tolerantly, validates quality, attempts one repair when useful, and falls back to `local_safe_draft` when the LLM result is not usable.
+## Request and fallback behavior
 
-## Provider Guidelines
+The provider layer accepts tolerant JSON/Markdown response forms where the active stage allows it, validates stage output, records diagnostics, and performs bounded repair when appropriate. Timeouts, authentication errors, quota errors, invalid output, or context limits are surfaced as user-facing errors. A complete AI-pipeline failure may enter the explicitly labelled Basic Offline Review fallback; it is not silently presented as an equivalent AI result.
 
-When adding a provider:
+## Adding a provider
 
-1. Add the provider under `backend/app/services/llm_providers/`.
-2. Register it in the provider registry.
-3. Never log raw API keys or authorization headers.
-4. Add tests for parsing, timeout behavior, fallback behavior, and key redaction.
-5. Keep the local safe draft path working when the provider fails.
+Read [CONTRIBUTING.md](../CONTRIBUTING.md). Add tests for request construction, parsing, timeout behavior, key redaction, and fallback behavior. Do not log raw authorization headers or full course material.

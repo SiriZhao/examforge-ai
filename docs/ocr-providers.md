@@ -1,6 +1,6 @@
 # OCR Providers
 
-CampusForge extracts embedded text first and only uses OCR when a page or image needs it. This avoids wasting time on text PDFs and improves cloud performance.
+RecallForge AI extracts embedded text first and only uses OCR when a page or image needs it. This avoids wasting time on text PDFs and improves local and cloud performance.
 
 ## Current Strategy
 

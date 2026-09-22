@@ -1,9 +1,9 @@
-# CampusForge Demo Output
+# RecallForge AI Demo Output
 
 > Fictional generated review pack based on `demo_course_material.md` and `demo_past_exam.md`.
 
 Course: Introduction to Plant Biology  
-Mode: Rule-based + exam-focused review generation  
+Mode: Basic Offline Review + exam-focused review generation
 Export targets: Markdown / Word / PDF
 
 ## Executive Summary
